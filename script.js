@@ -84,7 +84,7 @@ async function chargerVehicules() {
   markers.forEach(m => map.removeLayer(m));
   markers = [];
   try {
-    const resp = await fetch('https://yabrich.pythonanywhere.com/vehicules-irigo.json');
+    const resp = await fetch('https://web-production-c4b0.up.railway.app/vehicules-irigo.json');
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     data.forEach(v => {

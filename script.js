@@ -39,6 +39,10 @@ fetch('irigo_gtfs_lines.geojson')
         );
       }
     }).addTo(map);
+
+    // premier chargement + rafraîchissement
+    chargerVehicules();
+    setInterval(chargerVehicules, 30000);
   })
   .catch(err => console.error('Échec chargement GeoJSON lignes :', err));
 
@@ -99,7 +103,6 @@ async function chargerVehicules() {
       let busid = v.id
       if(busid.length > 4)  {
         busid = "Bus ALEOP"
-        console.info(busid)
       }
 
       const m = L.marker([v.latitude, v.longitude], {icon})
@@ -115,7 +118,3 @@ async function chargerVehicules() {
     console.warn('Impossible de charger les véhicules :', e);
   }
 }
-
-// premier chargement + rafraîchissement
-chargerVehicules();
-setInterval(chargerVehicules, 45000);

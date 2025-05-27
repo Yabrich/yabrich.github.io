@@ -84,7 +84,7 @@ async function chargerVehicules() {
   markers.forEach(m => map.removeLayer(m));
   markers = [];
   try {
-    const resp = await fetch('http://localhost:5000/vehicules-irigo.json');
+    const resp = await fetch('https://ton-username.pythonanywhere.com/vehicules-irigo.json');
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     data.forEach(v => {

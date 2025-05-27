@@ -5,6 +5,17 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '© OpenStreetMap'
 }).addTo(map);
 
+
+// Charge les noms complets des arrêts
+fetch('horaires-theoriques-et-arrets-du-reseau-irigo-gtfs.json')
+  .then(r => r.json())
+  .then(stops => {
+    const stopNames = {};
+    stops.forEach(s => {
+      stopNames[s.stop_id] = s.stop_name;
+    })
+  })
+
 // 2) Affiche les lignes depuis le GeoJSON local
 
 let lineColors = {}
@@ -110,7 +121,7 @@ async function chargerVehicules() {
         .bindPopup(
           `ID : ${busid}<br>` +
           `Ligne : ${v.route_id ?? '—'}<br>` +
-          `Prochain Arrêt : ${v.stop_id ?? '—'}`
+          `Prochain Arrêt : ${stopNames[v.stop_id] ?? '—'}`
         );
       markers.push(m);
     });

@@ -4,17 +4,17 @@
   <meta charset="UTF-8" />
   <title>Carte Irigo – Lignes & Positions</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="icon_site.png" />
+
   <!-- Leaflet CSS -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
   />
-  <!-- Font Awesome sans integrity -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/@fortawesome/fontawesome-free@6.4.0/css/all.min.css"
   />
-  <!-- favicon vierge (optionnel) -->
   <link rel="icon" href="data:;base64,iVBORw0KGgo=">
   <style>
     body, html { margin:0; padding:0; height:100%; }
@@ -24,9 +24,24 @@
 
 <body>
   <div id="map"></div>
+  <div id="filter-panel" style="
+     position: absolute;
+     top: 10px; right: 10px;
+     background: rgba(255,255,255,0.9);
+     z-index: 1000;
+     font-family: cursive;
+     padding: 8px;
+     max-height: 60vh;
+     overflow-y: auto;
+     border-radius: 4px;
+     box-shadow: 0 0 5px rgba(0,0,0,0.3);
+    ">
+  <strong>Filtrer les lignes</strong>
+  <div id="filter-list"></div>
+</div>
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
-  <!-- Votre script externe -->
   <script src="script.js"></script>
+  
 </body>
 </html>

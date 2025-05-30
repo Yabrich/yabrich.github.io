@@ -154,6 +154,13 @@ Promise.all([
       : '▶ Filtrer les lignes';
   });
   filterHeader.innerHTML = '▶ Filtrer les lignes';
+  document.addEventListener('click', (e) => {
+    if (open && !filterPanel.contains(e.target) && e.target !== filterHeader) {
+      open = false;
+      filterList.style.maxHeight = '0';
+      filterHeader.innerHTML = '▶ Filtrer les lignes';
+    }
+  });
 
   // Vide l'ancien contenu
   filterList.innerHTML = '';

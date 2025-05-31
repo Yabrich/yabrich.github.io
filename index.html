@@ -19,6 +19,31 @@
   <style>
     body, html { margin:0; padding:0; height:100%; }
     #map { width:100%; height:100%; }
+
+    #locate_btn {
+      position: absolute;
+      top: 15px;            
+      right: 200px;          
+      z-index: 1000;        
+      
+      display: inline-block;
+      padding: 6px 12px;
+      background-color: #483f91;
+      color: #fff;
+      font-family: Arial, Helvetica, sans-serif;
+      font-weight: bold;
+      font-size: 14px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s ease, transform 0.2s ease;
+    }
+
+    #locate_btn:hover {
+      background-color: #372d6e;
+      transform: translateY(-1px);
+    }
+
   </style>
 </head>
 
@@ -39,6 +64,9 @@
   <strong>Filtrer les lignes</strong>
   <div id="filter-list"></div>
 </div>
+  <button id="locate_btn">Me localiser</button>
+
+  
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
   <script src="script.js"></script>

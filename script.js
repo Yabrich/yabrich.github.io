@@ -39,8 +39,9 @@ styleEl.textContent = `
   transform: scale(1.05);
 }
 
-/* Styles pour le bouton Tout cocher / Tout décocher */
-#toggle-all-btn {
+/* Styles pour le bouton Tout cocher / Tout décocher et Me localiser */
+#toggle-all-btn,
+#locate-btn {               /* Nouveau sélecteur pour harmoniser l’aspect */
   display: inline-block;
   padding: 6px 12px;
   margin: 8px 0;
@@ -52,12 +53,30 @@ styleEl.textContent = `
   font-weight: bold;
   transition: background-color 0.2s ease, transform 0.2s ease;
 }
-#toggle-all-btn:hover {
+#toggle-all-btn:hover,
+#locate-btn:hover {         /* Même état hover pour les deux boutons */
   background-color: #372d6e;
   transform: translateY(-1px);
 }
 `;
 document.head.append(styleEl);
+
+// Fonction de chargement des routes sélectionnées depuis localStorage
+function loadSelectedRoutes() {
+  const stored = localStorage.getItem('selectedRoutes');
+  if (stored) {
+    try {
+      return new Set(JSON.parse(stored));
+    } catch (e) {
+      console.warn('Impossible de parser selectedRoutes dans localStorage :', e);
+      return new Set();
+    }
+  }
+  // Par défaut, afficher les lignes de tramway et les lignes majeures
+  const defaultRoutes = ['A','B','C','01','02','03','04'];
+  localStorage.setItem('selectedRoutes', JSON.stringify(defaultRoutes));
+  return new Set(defaultRoutes);
+}
 
 // Initialise la carte
 const map = L.map('map').setView([47.4736, -0.5541], 13);
@@ -66,7 +85,8 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '© OpenStreetMap'
 }).addTo(map);
 
-let selectedRoutes = new Set();
+// Ensemble des routes sélectionnées, chargé depuis localStorage
+let selectedRoutes = loadSelectedRoutes();
 let linesGeoJSON, stopsData;
 let lineColors = {};
 let stopNames = {};
@@ -180,6 +200,8 @@ Promise.all([
       else selectedRoutes.delete(rid);
     });
     toggleBtn.textContent = selectAll ? 'Tout décocher' : 'Tout cocher';
+    // Sauvegarde dans localStorage
+    localStorage.setItem('selectedRoutes', JSON.stringify(Array.from(selectedRoutes)));
     updateLines();
     chargerVehicules();
   });
@@ -187,14 +209,12 @@ Promise.all([
 
   // Génère chaque section de filtres
   categories.forEach(cat => {
-    // Titre de section
     const catTitle = document.createElement('div');
     catTitle.textContent = cat.title;
     catTitle.style.fontWeight = 'bold';
     catTitle.style.margin = '8px 0 4px';
     filterList.appendChild(catTitle);
 
-    // Cases à cocher pour cette catégorie
     cat.routes.forEach(rid => {
       if (!(rid in lineColors)) return;
 
@@ -205,21 +225,20 @@ Promise.all([
       chk.type    = 'checkbox';
       chk.id      = `chk-${rid}`;
       chk.value   = rid;
-      chk.checked = ['Tramway','Lignes majeures']
-                    .includes(cat.title);
-      if (chk.checked) selectedRoutes.add(rid);
+      // On coche si l'utilisateur avait déjà sélectionné cette route
+      chk.checked = selectedRoutes.has(rid);
 
       const lbl = document.createElement('label');
       lbl.htmlFor     = chk.id;
-      if(rid>=20 && rid<=25){
-      lbl.textContent = "E"+rid;
-      }
-      else{lbl.textContent = rid;}
+      if (rid >= 20 && rid <= 25) lbl.textContent = "E" + rid;
+      else lbl.textContent = rid;
       lbl.style.color = '#' + lineColors[rid];
 
       chk.addEventListener('change', () => {
         if (chk.checked) selectedRoutes.add(rid);
         else selectedRoutes.delete(rid);
+        // Sauvegarde dans localStorage
+        localStorage.setItem('selectedRoutes', JSON.stringify(Array.from(selectedRoutes)));
         updateLines();
         chargerVehicules();
       });
@@ -236,6 +255,32 @@ Promise.all([
   setInterval(chargerVehicules, 30000);
 })
 .catch(err => console.error('Échec chargement initial :', err));
+
+// Gestion locate-btn (suppose que map est déjà défini)
+const locateBtn = document.getElementById("locate_btn");
+locateBtn.addEventListener('click', () => {
+  if (!navigator.geolocation) {
+    alert('La géolocalisation n’est pas prise en charge par votre navigateur.');
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    position => {
+      const { latitude, longitude } = position.coords;
+      map.setView([latitude, longitude], 16);
+
+      L.marker([latitude, longitude])
+       .addTo(map)
+       .bindPopup('Vous êtes ici')
+       .openPopup();
+    },
+    error => {
+      console.error('Erreur lors de la récupération de la position :', error);
+      alert('Impossible de récupérer votre position.');
+    },
+    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+  );
+});
 
 // Initialisation du layerGroup des arrêts avec toggle zoom
 let stopsLayer;

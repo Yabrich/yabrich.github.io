@@ -16,13 +16,16 @@
     href="https://unpkg.com/@fortawesome/fontawesome-free@6.4.0/css/all.min.css"
   />
   <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+
+  <script src="https://unpkg.com/suncalc@1.8.0/suncalc.js"></script>
+
   <style>
     body, html { margin:0; padding:0; height:100%; }
     #map { width:100%; height:100%; }
 
     #locate_btn {
       position: absolute;
-      top: 15px;            
+      top: 7px;            
       right: 200px;          
       z-index: 1000;        
       
@@ -44,6 +47,71 @@
       transform: translateY(-1px);
     }
 
+    /* === Mode sombre pour le corps, le panneau et les boutons === */
+    body.dark-mode {
+      background-color: #2b2b2b;
+      color: #ddd;
+    }
+    body.dark-mode #map {
+      filter: brightness(0.8);
+    }
+    body.dark-mode #filter-panel {
+      background: rgba(40, 40, 40, 0.9);
+      color: #ddd;
+      box-shadow: 0 0 8px rgba(0,0,0,0.5);
+    }
+    body.dark-mode #filter-panel strong {
+      color: #fff;
+    }
+    body.dark-mode .checkbox-wrapper label {
+      color: #ccc;
+    }
+    body.dark-mode .checkbox-wrapper label::before {
+      border-color: #666;
+      background: #333;
+    }
+    body.dark-mode .checkbox-wrapper input:checked + label::before {
+      background: currentColor;
+    }
+    body.dark-mode #toggle-all-btn,
+    body.dark-mode #locate_btn {
+      background-color: #555;
+      color: #eee;
+    }
+    body.dark-mode #toggle-all-btn:hover,
+    body.dark-mode #locate_btn:hover {
+      background-color: #444;
+    }
+
+    /* === Mode sombre : override de #filter-panel === */
+    body.dark-mode #filter-panel {
+      background: rgba(30, 30, 30, 0.9) !important;
+      color: #ddd;
+      box-shadow: 0 0 8px rgba(0,0,0,0.6) !important;
+    }
+    body.dark-mode #filter-panel strong {
+      color: #fff !important;
+    }
+    body.dark-mode #filter-panel #toggle-all-btn,
+    body.dark-mode #filter-panel #locate_btn {
+      background-color: #555 !important;
+      color: #eee !important;
+    }
+    body.dark-mode #filter-panel #toggle-all-btn:hover,
+    body.dark-mode #filter-panel #locate_btn:hover {
+      background-color: #444 !important;
+    }
+    
+    body.dark-mode #filter-panel::-webkit-scrollbar {
+      width: 8px;
+    }
+    body.dark-mode #filter-panel::-webkit-scrollbar-track {
+      background: #333 !important;
+    }
+    body.dark-mode #filter-panel::-webkit-scrollbar-thumb {
+      background: #555 !important;
+      border-radius: 4px;
+    }
   </style>
 </head>
 

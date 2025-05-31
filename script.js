@@ -41,7 +41,7 @@ styleEl.textContent = `
 
 /* Styles pour le bouton Tout cocher / Tout décocher et Me localiser */
 #toggle-all-btn,
-#locate-btn {               /* Nouveau sélecteur pour harmoniser l’aspect */
+#locate_btn {
   display: inline-block;
   padding: 6px 12px;
   margin: 8px 0;
@@ -54,14 +54,93 @@ styleEl.textContent = `
   transition: background-color 0.2s ease, transform 0.2s ease;
 }
 #toggle-all-btn:hover,
-#locate-btn:hover {         /* Même état hover pour les deux boutons */
+#locate_btn:hover {
   background-color: #372d6e;
   transform: translateY(-1px);
 }
 `;
 document.head.append(styleEl);
 
-// Fonction de chargement des routes sélectionnées depuis localStorage
+// =============================================
+// 1. GESTION DU MODE SOMBRE (SUNRISE / SUNSET)
+// =============================================
+
+// Tile layers clair / sombre
+let lightTileLayer, darkTileLayer;
+
+// Fonction pour initialiser les deux tile layers
+function initTileLayers() {
+  lightTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '© OpenStreetMap'
+  });
+  darkTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 18,
+    attribution: '© CartoDB Dark Matter'
+  });
+}
+
+// Fonction qui détermine lever/coucher et applique le mode
+function applyDayNightMode() {
+  // On récupère le centre de la carte
+  const center = map.getCenter();
+  const lat = center.lat;
+  const lng = center.lng;
+  const now = new Date();
+
+  // Obtenir les horaires du lever/coucher pour la date d’aujourd’hui
+  const times = SunCalc.getTimes(now, lat, lng);
+  const sunrise = times.sunrise;    // Date object
+  const sunset  = times.sunset;     // Date object
+
+  // Si on est entre le coucher et le lever du lendemain
+  let isNight;
+  if (now >= sunset) {
+    // On se situe après le coucher => nuit
+    isNight = true;
+  } else if (now < sunrise) {
+    // On se situe avant le lever => nuit
+    isNight = true;
+  } else {
+    isNight = false;
+  }
+
+  // Appliquer le CSS et tileLayer correspondant
+  if (isNight) {
+    document.body.classList.add('dark-mode');
+    if (map.hasLayer(lightTileLayer)) map.removeLayer(lightTileLayer);
+    if (!map.hasLayer(darkTileLayer)) map.addLayer(darkTileLayer);
+  } else {
+    document.body.classList.remove('dark-mode');
+    if (map.hasLayer(darkTileLayer)) map.removeLayer(darkTileLayer);
+    if (!map.hasLayer(lightTileLayer)) map.addLayer(lightTileLayer);
+  }
+
+  // Planifier le prochain changement au prochain lever OU coucher
+  let nextSwitchTime;
+  if (isNight) {
+    // Prochaine transition = lever du soleil
+    nextSwitchTime = sunrise;
+  } else {
+    // Prochaine transition = coucher du soleil
+    nextSwitchTime = sunset;
+  }
+  // Si la prochaine transition est déjà passée (ex. minuit), on prend celle du lendemain
+  if (nextSwitchTime <= now) {
+    const tomorrow = new Date(now.getTime() + 24*60*60*1000);
+    const timesTmr = SunCalc.getTimes(tomorrow, lat, lng);
+    nextSwitchTime = isNight ? timesTmr.sunrise : timesTmr.sunset;
+  }
+  // Calcul de l’intervalle avant la prochaine transition (en ms)
+  const delayMs = nextSwitchTime.getTime() - now.getTime();
+  setTimeout(applyDayNightMode, delayMs + 1000); // +1s pour être sûr
+}
+
+
+// ==================================
+// 2. PERSISTANCE DES FILTRES (localStorage)
+// ==================================
+
 function loadSelectedRoutes() {
   const stored = localStorage.getItem('selectedRoutes');
   if (stored) {
@@ -72,27 +151,38 @@ function loadSelectedRoutes() {
       return new Set();
     }
   }
-  // Par défaut, afficher les lignes de tramway et les lignes majeures
+  // Par défaut, afficher les lignes de tramway et lignes majeures
   const defaultRoutes = ['A','B','C','01','02','03','04'];
   localStorage.setItem('selectedRoutes', JSON.stringify(defaultRoutes));
   return new Set(defaultRoutes);
 }
 
-// Initialise la carte
-const map = L.map('map').setView([47.4736, -0.5541], 13);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 18,
-  attribution: '© OpenStreetMap'
-}).addTo(map);
-
-// Ensemble des routes sélectionnées, chargé depuis localStorage
 let selectedRoutes = loadSelectedRoutes();
 let linesGeoJSON, stopsData;
 let lineColors = {};
 let stopNames = {};
 let linesLayer;
 
-// Fonction pour (re)dessiner les lignes filtrées
+// ==================================
+// 3. INITIALISATION DE LA CARTE
+// ==================================
+
+const map = L.map('map').setView([47.4736, -0.5541], 13);
+
+// Créer d’emblée les tile layers
+initTileLayers();
+
+// Par défaut, on ajoute celui qui correspond à l’heure actuelle (le reste est géré dans applyDayNightMode)
+map.addLayer(lightTileLayer);
+
+// On lance tout de suite la détection jour/nuit
+applyDayNightMode();
+
+
+// ==================================
+// 4. DESSIN DES LIGNES FILTRÉES
+// ==================================
+
 function updateLines() {
   if (linesLayer) map.removeLayer(linesLayer);
   linesLayer = L.geoJSON(linesGeoJSON, {
@@ -109,7 +199,11 @@ function updateLines() {
   }).addTo(map);
 }
 
-// Icônes bus/tram
+
+// ==================================
+// 5. ICÔNES BUS / TRAM
+// ==================================
+
 function getBusIcon(color) {
   return L.divIcon({
     className: '',
@@ -127,7 +221,11 @@ function getTramIcon(color) {
   });
 }
 
-// Chargement simultané des arrêts et lignes
+
+// ==================================
+// 6. CHARGEMENT DES DONNÉES (ARRÊTS + LIGNES)
+// ==================================
+
 Promise.all([
   fetch('horaires-theoriques-et-arrets-du-reseau-irigo-gtfs.json').then(r => r.json()),
   fetch('irigo_gtfs_lines.geojson').then(r => r.json())
@@ -145,22 +243,22 @@ Promise.all([
 
   // Définit les catégories et leurs lignes
   const categories = [
-    { title: 'Tramway',         routes: ['A','B','C'] },
-    { title: 'Lignes majeures',     routes: ['01','02','03','04'] },
+    { title: 'Tramway',           routes: ['A','B','C'] },
+    { title: 'Lignes majeures',   routes: ['01','02','03','04'] },
     { title: 'Lignes de proximité', routes: ['05','06','07','08','09','10','11','12'] },
-    { title: 'Lignes express',      routes: ['20','21','22','23','24','25'] },
-    { title: 'Lignes suburbaines',   routes: Array.from({length:13}, (_,i) =>
-                                            String(30 + i).padStart(2,'0')) }
+    { title: 'Lignes express',    routes: ['20','21','22','23','24','25'] },
+    { title: 'Lignes suburbaines', routes: Array.from({length:13}, (_,i) =>
+                                        String(30 + i).padStart(2,'0')) }
   ];
 
   // Initialise panneau de filtres
-  const filterPanel = document.getElementById('filter-panel');
+  const filterPanel  = document.getElementById('filter-panel');
   const filterHeader = filterPanel.querySelector('strong');
-  const filterList = document.getElementById('filter-list');
+  const filterList   = document.getElementById('filter-list');
 
-  filterList.style.maxHeight   = '0';
-  filterList.style.overflow    = 'hidden';
-  filterList.style.transition  = 'max-height 0.4s ease';
+  filterList.style.maxHeight  = '0';
+  filterList.style.overflow   = 'hidden';
+  filterList.style.transition = 'max-height 0.4s ease';
 
   let open = false;
   filterHeader.style.cursor = 'pointer';
@@ -182,7 +280,7 @@ Promise.all([
     }
   });
 
-  // Vide l'ancien contenu
+  // Vide le panneau
   filterList.innerHTML = '';
 
   // Ajout du bouton Tout cocher / Tout décocher
@@ -222,16 +320,15 @@ Promise.all([
       wrapper.classList.add('checkbox-wrapper');
 
       const chk = document.createElement('input');
-      chk.type    = 'checkbox';
-      chk.id      = `chk-${rid}`;
-      chk.value   = rid;
+      chk.type  = 'checkbox';
+      chk.id    = `chk-${rid}`;
+      chk.value = rid;
       // On coche si l'utilisateur avait déjà sélectionné cette route
       chk.checked = selectedRoutes.has(rid);
 
       const lbl = document.createElement('label');
-      lbl.htmlFor     = chk.id;
-      if (rid >= 20 && rid <= 25) lbl.textContent = "E" + rid;
-      else lbl.textContent = rid;
+      lbl.htmlFor = chk.id;
+      lbl.textContent = (rid >= 20 && rid <= 25) ? `E${rid}` : rid;
       lbl.style.color = '#' + lineColors[rid];
 
       chk.addEventListener('change', () => {
@@ -256,7 +353,10 @@ Promise.all([
 })
 .catch(err => console.error('Échec chargement initial :', err));
 
-// Gestion locate-btn (suppose que map est déjà défini)
+
+// ==================================
+// 7. BOUTON "ME LOCALISER"
+// ==================================
 const locateBtn = document.getElementById("locate_btn");
 locateBtn.addEventListener('click', () => {
   if (!navigator.geolocation) {
@@ -267,38 +367,47 @@ locateBtn.addEventListener('click', () => {
   navigator.geolocation.getCurrentPosition(
     position => {
       const { latitude, longitude } = position.coords;
+      // Centre la carte sur la position de l’utilisateur (zoom 16)
       map.setView([latitude, longitude], 16);
 
+      // Facultatif : ajouter un marqueur temporaire "Vous êtes ici"
       L.marker([latitude, longitude])
-       .addTo(map)
-       .bindPopup('Vous êtes ici')
-       .openPopup();
+        .addTo(map)
+        .bindPopup('Vous êtes ici')
+        .openPopup();
     },
     error => {
       console.error('Erreur lors de la récupération de la position :', error);
       alert('Impossible de récupérer votre position.');
     },
-    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+    {
+      enableHighAccuracy: true,
+      timeout: 5000,
+      maximumAge: 0
+    }
   );
 });
 
-// Initialisation du layerGroup des arrêts avec toggle zoom
+
+// ==================================
+// 8. LAYER GROUP ARRÊTS + ZOOM-TOGGLE
+// ==================================
 let stopsLayer;
 function initStopsLayer() {
   stopsLayer = L.layerGroup();
-  const ZOOM_THRESHOLD = 15;
+  const ZOOM_THRESHOLD = 16;
   stopsData.forEach(s => {
     if (s.stop_coordinates?.lat && s.stop_coordinates?.lon) {
-      const cm = L.circleMarker([
-        s.stop_coordinates.lat,
-        s.stop_coordinates.lon
-      ], {
-        radius: 4,
-        fillColor: '#fff',
-        color: '#483f91',
-        weight: 2,
-        fillOpacity: 1
-      }).bindTooltip(s.stop_name, { direction:'right', offset:[6,0] });
+      const cm = L.circleMarker(
+        [s.stop_coordinates.lat, s.stop_coordinates.lon],
+        {
+          radius: 4,
+          fillColor: '#fff',
+          color: '#483f91',
+          weight: 2,
+          fillOpacity: 1
+        }
+      ).bindTooltip(s.stop_name, { direction:'right', offset:[6,0] });
       stopsLayer.addLayer(cm);
     }
   });
@@ -311,7 +420,10 @@ function initStopsLayer() {
   map.on('zoomend', toggleStops);
 }
 
-// Affichage des véhicules
+
+// ==================================
+// 9. AFFICHAGE DES VÉHICULES
+// ==================================
 let markers = [];
 async function chargerVehicules() {
   markers.forEach(m => map.removeLayer(m));

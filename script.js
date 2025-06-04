@@ -290,7 +290,7 @@ Promise.all([
   toggleBtn.style.margin = '8px 0';
   toggleBtn.addEventListener('click', () => {
     const allCheckboxes = filterList.querySelectorAll('input[type="checkbox"]');
-    const selectAll = toggleBtn.textContent === 'Tout cocher';
+    const selectAll = Array.from(allCheckboxes).some(chk => !chk.checked);
     allCheckboxes.forEach(chk => {
       chk.checked = selectAll;
       const rid = chk.value;
@@ -341,9 +341,15 @@ Promise.all([
       });
 
       wrapper.append(chk, lbl);
-      filterList.appendChild(wrapper);
+    filterList.appendChild(wrapper);
     });
   });
+
+  // Ajuste le libellé du bouton selon l'état initial
+  const initialCheckboxes = filterList.querySelectorAll('input[type="checkbox"]');
+  const allCheckedInit = Array.from(initialCheckboxes).length > 0 &&
+                         Array.from(initialCheckboxes).every(chk => chk.checked);
+  toggleBtn.textContent = allCheckedInit ? 'Tout décocher' : 'Tout cocher';
 
   // Initial render
   updateLines();

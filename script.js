@@ -162,6 +162,7 @@ let linesGeoJSON, stopsData;
 let lineColors = {};
 let stopNames = {};
 let linesLayer;
+let locateMarker; // Marker used for the "Me localiser" feature
 
 // ==================================
 // 3. INITIALISATION DE LA CARTE
@@ -376,8 +377,11 @@ locateBtn.addEventListener('click', () => {
       // Centre la carte sur la position de l’utilisateur (zoom 16)
       map.setView([latitude, longitude], 16);
 
-      // Facultatif : ajouter un marqueur temporaire "Vous êtes ici"
-      L.marker([latitude, longitude])
+      // Ajoute un marqueur temporaire "Vous êtes ici" et supprime l'ancien
+      if (locateMarker) {
+        map.removeLayer(locateMarker);
+      }
+      locateMarker = L.marker([latitude, longitude])
         .addTo(map)
         .bindPopup('Vous êtes ici')
         .openPopup();

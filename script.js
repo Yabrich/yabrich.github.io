@@ -163,6 +163,8 @@ let lineColors = {};
 let stopNames = {};
 let linesLayer;
 let locateMarker; // Marker used for the "Me localiser" feature
+let trackedBusId = null; // ID du bus actuellement suivi
+let trackedPopupOpen = false;
 
 // ==================================
 // 3. INITIALISATION DE LA CARTE
@@ -291,7 +293,7 @@ Promise.all([
   toggleBtn.style.margin = '8px 0';
   toggleBtn.addEventListener('click', () => {
     const allCheckboxes = filterList.querySelectorAll('input[type="checkbox"]');
-    const selectAll = Array.from(allCheckboxes).some(chk => !chk.checked);
+    const selectAll = toggleBtn.textContent === 'Tout cocher';
     allCheckboxes.forEach(chk => {
       chk.checked = selectAll;
       const rid = chk.value;
@@ -342,15 +344,9 @@ Promise.all([
       });
 
       wrapper.append(chk, lbl);
-    filterList.appendChild(wrapper);
+      filterList.appendChild(wrapper);
     });
   });
-
-  // Ajuste le libellé du bouton selon l'état initial
-  const initialCheckboxes = filterList.querySelectorAll('input[type="checkbox"]');
-  const allCheckedInit = Array.from(initialCheckboxes).length > 0 &&
-                         Array.from(initialCheckboxes).every(chk => chk.checked);
-  toggleBtn.textContent = allCheckedInit ? 'Tout décocher' : 'Tout cocher';
 
   // Initial render
   updateLines();
@@ -377,11 +373,8 @@ locateBtn.addEventListener('click', () => {
       // Centre la carte sur la position de l’utilisateur (zoom 16)
       map.setView([latitude, longitude], 16);
 
-      // Ajoute un marqueur temporaire "Vous êtes ici" et supprime l'ancien
-      if (locateMarker) {
-        map.removeLayer(locateMarker);
-      }
-      locateMarker = L.marker([latitude, longitude])
+      // Facultatif : ajouter un marqueur temporaire "Vous êtes ici"
+      L.marker([latitude, longitude])
         .addTo(map)
         .bindPopup('Vous êtes ici')
         .openPopup();
@@ -438,6 +431,7 @@ let markers = [];
 async function chargerVehicules() {
   markers.forEach(m => map.removeLayer(m));
   markers = [];
+  let trackedMarker = null;
   try {
     const resp = await fetch('https://web-production-c4b0.up.railway.app/vehicules-irigo.json');
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -453,15 +447,43 @@ async function chargerVehicules() {
       if (busid.length > 4) busid = 'Bus Suburbain';
       if (rid >= 20 && rid <= 25) rid = `E${rid}`;
 
+      const followLabel = trackedBusId === v.id
+        ? 'Arrêter le suivi'
+        : 'Suivre ce véhicule';
+      const popupHtml =
+        `ID : ${busid}<br>` +
+        `Ligne : ${rid || '—'}<br>` +
+        `Prochain Arrêt : ${stopNames[v.stop_id] || '—'}<br>` +
+        `<button class="follow-btn" data-id="${v.id}">${followLabel}</button>`;
       const m = L.marker([v.latitude, v.longitude], { icon })
         .addTo(map)
-        .bindPopup(
-          `ID : ${busid}<br>` +
-          `Ligne : ${rid || '—'}<br>` +
-          `Prochain Arrêt : ${stopNames[v.stop_id] || '—'}`
-        );
+        .bindPopup(popupHtml);
+      m.on('popupopen', e => {
+        const btn = e.popup.getElement().querySelector('.follow-btn');
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+          if (trackedBusId === v.id) {
+            trackedBusId = null;
+            trackedPopupOpen = false;
+            btn.textContent = 'Suivre ce véhicule';
+          } else {
+            trackedBusId = v.id;
+            trackedPopupOpen = true;
+            btn.textContent = 'Arrêter le suivi';
+            map.setView(m.getLatLng(), map.getZoom());
+          }
+        });
+      });
       markers.push(m);
+      if (trackedBusId === v.id) {
+        trackedMarker = m;  
+      }
     });
+    if (trackedMarker) {
+      trackedMarker.openPopup();
+      map.setView(trackedMarker.getLatLng(), map.getZoom());
+      map.setView(m.getLatLng(), map.getZoom());
+    }
   } catch (e) {
     console.warn('Impossible de charger les véhicules :', e);
   }

@@ -7,7 +7,7 @@ Cette page web affiche une carte interactive du réseau Irigo grâce à la bibli
 - **Localisation** : bouton *Me localiser* pour centrer la carte sur votre position.
 - **Mode sombre/clair** : le fond de carte bascule automatiquement selon l'heure (lever/coucher du soleil).
 - **Affichage détaillé des véhicules** : en cliquant sur un véhicule, vous obtenez son numéro de parc, la ligne, le prochain arrêt et la destination.
-  ![Détail véhicule](img\vehicle_detail.png)
+  ![Détail véhicule](.img\vehicle_detail.png)
 - **Suivi de véhicule** : depuis la fenêtre d'information d'un véhicule, cliquez sur *Suivre ce véhicule* pour que la carte reste centrée sur lui.
 - **Filtre des lignes** : choisissez les lignes à afficher. Les lignes sélectionnées sont mémorisées. Les lignes disponibles vont du tramway **A**, **B**, **C** aux bus **01** à **42**.
 
@@ -27,4 +27,4 @@ Cette page télécharge régulièrement la position des véhicules via l'API ext
 
 ## Illustration
 
-![Aperçu de la carte](img\map.png)
+![Aperçu de la carte](.img\map.png)

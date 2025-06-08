@@ -1,3 +1,5 @@
+import * as XLSX from 'https://cdn.sheetjs.com/xlsx-0.19.0/package/xlsx.mjs';
+
 // Dynamically inject CSS for styled checkboxes
 const styleEl = document.createElement('style');
 styleEl.textContent = `
@@ -158,13 +160,14 @@ function loadSelectedRoutes() {
 }
 
 let selectedRoutes = loadSelectedRoutes();
-let linesGeoJSON, stopsData;
+let linesGeoJSON, stopsData, irigo_trips;
 let lineColors = {};
 let stopNames = {};
 let linesLayer;
 let locateMarker; // Marker used for the "Me localiser" feature
 let trackedBusId = null; // ID du bus actuellement suivi
 let trackedPopupOpen = false;
+let tripHeadsignMap = {};
 
 // ==================================
 // 3. INITIALISATION DE LA CARTE
@@ -231,11 +234,16 @@ function getTramIcon(color) {
 
 Promise.all([
   fetch('horaires-theoriques-et-arrets-du-reseau-irigo-gtfs.json').then(r => r.json()),
-  fetch('irigo_gtfs_lines.geojson').then(r => r.json())
+  fetch('irigo_gtfs_lines.geojson').then(r => r.json()),
+  fetch('irigo_trips.xlsx').then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.arrayBuffer();
+    })
 ])
-.then(([stops, geojson]) => {
+.then(([stops, geojson, tripsArrayBuffer]) => {
   stopsData = stops;
   linesGeoJSON = geojson;
+  irigo_trips = tripsArrayBuffer;
 
   // Construire stopNames et lineColors
   stops.forEach(s => stopNames[s.stop_id] = s.stop_name);
@@ -348,6 +356,19 @@ Promise.all([
     });
   });
 
+
+  // Table de correspondance pour les destinations.
+  const workbook   = XLSX.read(irigo_trips, { type: 'array' });
+  const sheetName  = workbook.SheetNames[0];
+  const sheet      = workbook.Sheets[sheetName];
+  const tripsJSON  = XLSX.utils.sheet_to_json(sheet, { raw: true });
+
+  window.tripHeadsignMap = tripsJSON.reduce((map, { trip_id, trip_headsign }) => {
+  map[trip_id.toString()] = trip_headsign;
+  return map;
+  }, {});
+
+
   // Initial render
   updateLines();
   initStopsLayer();
@@ -434,6 +455,7 @@ async function chargerVehicules() {
   let trackedMarker = null;
   try {
     const resp = await fetch('https://web-production-c4b0.up.railway.app/vehicules-irigo.json');
+    //const resp = await fetch('http://localhost:5000/vehicules-irigo.json');
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     data.forEach(v => {
@@ -447,12 +469,15 @@ async function chargerVehicules() {
       if (busid.length > 4) busid = 'Bus Suburbain';
       if (rid >= 20 && rid <= 25) rid = `E${rid}`;
 
+      const headsign = window.tripHeadsignMap[v.trip_id.toString()] || '—';
+
       const followLabel = trackedBusId === v.id
         ? 'Arrêter le suivi'
         : 'Suivre ce véhicule';
       const popupHtml =
         `ID : ${busid}<br>` +
         `Ligne : ${rid || '—'}<br>` +
+        `Destination : ${headsign}<br>` +
         `Prochain Arrêt : ${stopNames[v.stop_id] || '—'}<br>` +
         `<button class="follow-btn" data-id="${v.id}">${followLabel}</button>`;
       const m = L.marker([v.latitude, v.longitude], { icon })

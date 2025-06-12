@@ -393,9 +393,10 @@ locateBtn.addEventListener('click', () => {
       const { latitude, longitude } = position.coords;
       // Centre la carte sur la position de l’utilisateur (zoom 16)
       map.setView([latitude, longitude], 16);
+      if(locateMarker) map.removeLayer(locateMarker); // Supprime l'ancien marqueur
 
-      // Facultatif : ajouter un marqueur temporaire "Vous êtes ici"
-      L.marker([latitude, longitude])
+      // Marqueur temporaire "Vous êtes ici"
+      locateMarker = L.marker([latitude, longitude])
         .addTo(map)
         .bindPopup('Vous êtes ici')
         .openPopup();

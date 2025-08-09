@@ -312,7 +312,7 @@ Promise.all([
     // Sauvegarde dans localStorage
     localStorage.setItem('selectedRoutes', JSON.stringify(Array.from(selectedRoutes)));
     updateLines();
-    chargerVehicules();
+    updateVehicles();
   });
   filterList.appendChild(toggleBtn);
 
@@ -348,7 +348,7 @@ Promise.all([
         // Sauvegarde dans localStorage
         localStorage.setItem('selectedRoutes', JSON.stringify(Array.from(selectedRoutes)));
         updateLines();
-        chargerVehicules();
+        updateVehicles();
       });
 
       wrapper.append(chk, lbl);
@@ -372,8 +372,8 @@ Promise.all([
   // Initial render
   updateLines();
   initStopsLayer();
-  chargerVehicules();
-  setInterval(chargerVehicules, 30000);
+  updateVehicles();
+  setInterval(updateVehicles, UPDATE_INTERVAL_MS);
 })
 .catch(err => console.error('Échec chargement initial :', err));
 
@@ -449,6 +449,20 @@ function initStopsLayer() {
 // ==================================
 // 9. AFFICHAGE DES VÉHICULES
 // ==================================
+const UPDATE_INTERVAL_MS = 30000;
+const timerEl = document.getElementById('update_timer');
+let remainingTime = UPDATE_INTERVAL_MS / 1000;
+function updateTimerDisplay() {
+  timerEl.textContent = `Mise à jour dans ${remainingTime}s`;
+}
+updateTimerDisplay();
+setInterval(() => {
+  if (remainingTime > 0) {
+    remainingTime--;
+    updateTimerDisplay();
+  }
+}, 1000);
+
 let markers = [];
 async function chargerVehicules() {
   markers.forEach(m => map.removeLayer(m));
@@ -513,4 +527,10 @@ async function chargerVehicules() {
   } catch (e) {
     console.warn('Impossible de charger les véhicules :', e);
   }
+}
+
+async function updateVehicles() {
+  remainingTime = UPDATE_INTERVAL_MS / 1000;
+  updateTimerDisplay();
+  await chargerVehicules();
 }

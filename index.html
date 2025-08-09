@@ -47,6 +47,18 @@
       transform: translateY(-1px);
     }
 
+    #update_timer {
+      position: absolute;
+      bottom: 40px;
+      left: 10px;
+      z-index: 1000;
+      background: rgba(255,255,255,0.9);
+      padding: 6px 8px;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      border-radius: 4px;
+    }
+
     #track_hint {
       position: absolute;
       bottom: 10px;
@@ -111,6 +123,7 @@
     body.dark-mode #locate_btn:hover {
       background-color: #444;
     }
+    body.dark-mode #update_timer,
     body.dark-mode #track_hint {
       background: rgba(40, 40, 40, 0.9);
       color: #ddd;
@@ -175,6 +188,7 @@
   <div id="filter-list"></div>
 </div>
   <button id="locate_btn">Me localiser</button>
+  <div id="update_timer"></div>
   <div id="track_hint">Cliquez sur un véhicule pour le suivre</div>
 
   <!-- SheetJS-->

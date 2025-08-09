@@ -174,7 +174,7 @@ let trackedBusLabel = null; // Label affiché pour le bus suivi
 const trackHintEl = document.getElementById('track_hint');
 function updateTrackHint() {
   if (trackedBusId && trackedBusLabel) {
-    trackHintEl.textContent = `vous suivez le véhicule n°${trackedBusLabel}`;
+    trackHintEl.textContent = `Vous suivez le véhicule n°${trackedBusLabel}`;
   } else {
     trackHintEl.textContent = 'Cliquez sur un véhicule pour le suivre';
   }
@@ -535,6 +535,7 @@ async function chargerVehicules() {
         trackedMarker = m;  
       }
     });
+
     if (trackedMarker) {
       trackedMarker.openPopup();
       map.setView(trackedMarker.getLatLng(), map.getZoom());

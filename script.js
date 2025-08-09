@@ -168,6 +168,18 @@ let locateMarker; // Marker used for the "Me localiser" feature
 let trackedBusId = null; // ID du bus actuellement suivi
 let trackedPopupOpen = false;
 let tripHeadsignMap = {};
+let trackedBusLabel = null; // Label affiché pour le bus suivi
+
+// Gestion de l'affichage du message de suivi
+const trackHintEl = document.getElementById('track_hint');
+function updateTrackHint() {
+  if (trackedBusId && trackedBusLabel) {
+    trackHintEl.textContent = `vous suivez le véhicule n°${trackedBusLabel}`;
+  } else {
+    trackHintEl.textContent = 'Cliquez sur un véhicule pour le suivre';
+  }
+}
+updateTrackHint();
 
 // ==================================
 // 3. INITIALISATION DE LA CARTE
@@ -505,11 +517,15 @@ async function chargerVehicules() {
           if (trackedBusId === v.id) {
             trackedBusId = null;
             trackedPopupOpen = false;
+            trackedBusLabel = null;
             btn.textContent = 'Suivre ce véhicule';
+            updateTrackHint();
           } else {
             trackedBusId = v.id;
             trackedPopupOpen = true;
+            trackedBusLabel = busid;
             btn.textContent = 'Arrêter le suivi';
+            updateTrackHint();
             map.setView(m.getLatLng(), map.getZoom());
           }
         });
@@ -523,6 +539,12 @@ async function chargerVehicules() {
       trackedMarker.openPopup();
       map.setView(trackedMarker.getLatLng(), map.getZoom());
       map.setView(m.getLatLng(), map.getZoom());
+    } else if (trackedBusId) {
+      // Le véhicule suivi n'est plus présent
+      trackedBusId = null;
+      trackedBusLabel = null;
+      trackedPopupOpen = false;
+      updateTrackHint();
     }
   } catch (e) {
     console.warn('Impossible de charger les véhicules :', e);

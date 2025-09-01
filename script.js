@@ -181,6 +181,7 @@ function updateTrackHint() {
 }
 updateTrackHint();
 
+
 // ==================================
 // 3. INITIALISATION DE LA CARTE
 // ==================================
@@ -247,8 +248,11 @@ function getTramIcon(color) {
 Promise.all([
   fetch('horaires-theoriques-et-arrets-du-reseau-irigo-gtfs.json').then(r => r.json()),
   fetch('irigo_gtfs_lines.geojson').then(r => r.json()),
-  fetch('irigo_trips.xlsx').then(res => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  // Tente d'abord irigo_trips.xlsx, puis fallback sur l'extension mal orthographiée .xlxs
+  fetch('irigo_trips.xlsx')
+    .then(res => res.ok ? res : fetch('irigo_trips.xlxs'))
+    .then(res => {
+      if (!res || !res.ok) throw new Error(`HTTP ${res ? res.status : 'no response'}`);
       return res.arrayBuffer();
     })
 ])
@@ -371,13 +375,22 @@ Promise.all([
 
   // Table de correspondance pour les destinations.
   const workbook   = XLSX.read(irigo_trips, { type: 'array' });
-  const sheetName  = workbook.SheetNames[0];
+  // Cherche une feuille nommée "trips" sinon prend la première
+  const sheetName  = (workbook.SheetNames.find(n => n && n.toLowerCase().includes('trip')) || workbook.SheetNames[0]);
   const sheet      = workbook.Sheets[sheetName];
   const tripsJSON  = XLSX.utils.sheet_to_json(sheet, { raw: true });
 
-  window.tripHeadsignMap = tripsJSON.reduce((map, { trip_id, trip_headsign }) => {
-  map[trip_id.toString()] = trip_headsign;
-  return map;
+  // Construit la map avec clés normalisées (avec et sans zéros initiaux)
+  window.tripHeadsignMap = tripsJSON.reduce((map, row) => {
+    const idVal = row.trip_id ?? row.TRIP_ID ?? row['Trip ID'] ?? row['tripId'];
+    const head  = row.trip_headsign ?? row.headsign ?? row.destination ?? row['Trip Headsign'] ?? row['trip Headsign'];
+    if (idVal != null && head != null && head !== '') {
+      const k = String(idVal);
+      const kNoZ = (k.replace(/^0+/, '') || '0');
+      map[k] = head;
+      if (!(kNoZ in map)) map[kNoZ] = head;
+    }
+    return map;
   }, {});
 
 
@@ -496,7 +509,11 @@ async function chargerVehicules() {
       if (busid.length > 4) busid = 'Bus Suburbain';
       if (rid >= 20 && rid <= 25) rid = `E${rid}`;
 
-      const headsign = window.tripHeadsignMap[v.trip_id.toString()] || '—';
+      console.log(v)
+
+      const key = v.trip_id != null ? String(v.trip_id) : '';
+      const keyNoZ = (key.replace(/^0+/, '') || '0');
+      const headsign = window.tripHeadsignMap[key] ?? window.tripHeadsignMap[keyNoZ] ?? '—';
 
       const followLabel = trackedBusId === v.id
         ? 'Arrêter le suivi'
@@ -535,7 +552,6 @@ async function chargerVehicules() {
         trackedMarker = m;  
       }
     });
-
     if (trackedMarker) {
       trackedMarker.openPopup();
       map.setView(trackedMarker.getLatLng(), map.getZoom());

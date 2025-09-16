@@ -213,7 +213,11 @@ function updateLines() {
     }),
     onEachFeature: (f, layer) => {
       const p = f.properties;
-      layer.bindPopup(`Ligne ${p.route_id}${p.route_long_name ? ` – ${p.route_long_name}` : ''}`);
+      let route_num = p.route_id
+      if (route_num >= 20 && route_num <= 25){
+        route_num = "E"+route_num
+      }
+      layer.bindPopup(`Ligne ${route_num}${p.route_long_name ? ` – ${p.route_long_name}` : ''}`);
     }
   }).addTo(map);
 }
@@ -508,8 +512,6 @@ async function chargerVehicules() {
       let busid = v.id;
       if (busid.length > 4) busid = 'Bus Suburbain';
       if (rid >= 20 && rid <= 25) rid = `E${rid}`;
-
-      console.log(v)
 
       const key = v.trip_id != null ? String(v.trip_id) : '';
       const keyNoZ = (key.replace(/^0+/, '') || '0');

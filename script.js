@@ -517,6 +517,8 @@ async function chargerVehicules() {
       const keyNoZ = (key.replace(/^0+/, '') || '0');
       const headsign = window.tripHeadsignMap[key] ?? window.tripHeadsignMap[keyNoZ] ?? '—';
 
+      console.log(v)
+
       const followLabel = trackedBusId === v.id
         ? 'Arrêter le suivi'
         : 'Suivre ce véhicule';

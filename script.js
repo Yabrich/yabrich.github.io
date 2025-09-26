@@ -161,14 +161,21 @@ function loadSelectedRoutes() {
 
 let selectedRoutes = loadSelectedRoutes();
 let linesGeoJSON, stopsData, irigo_trips;
-let lineColors = {};
-let stopNames = {};
+let lineColors = {}; // Couleur par ligne
+let stopNames = {}; // Nom par identifiant de station
+let stopCoords = {}; // Coordonnees par station
 let linesLayer;
 let locateMarker; // Marker used for the "Me localiser" feature
 let trackedBusId = null; // ID du bus actuellement suivi
 let trackedPopupOpen = false;
 let tripHeadsignMap = {};
 let trackedBusLabel = null; // Label affiché pour le bus suivi
+const tripStopTimesMap = new Map();
+const DEFAULT_LINE_COLOR = '#4caf50';
+const DEFAULT_TIMELINE_MESSAGE = 'Horaires indisponibles.';
+const DEFAULT_SPEED_M_S = 10;
+const MIN_SPEED_M_S = 3;
+const DELAY_THRESHOLD_SECONDS = 90;
 
 // Gestion de l'affichage du message de suivi
 const trackHintEl = document.getElementById('track_hint');
@@ -180,6 +187,634 @@ function updateTrackHint() {
   }
 }
 updateTrackHint();
+
+const loadingOverlay = document.getElementById('loading-overlay');
+const loadingOverlaySpinner = loadingOverlay ? loadingOverlay.querySelector('.loading-spinner') : null;
+const loadingOverlayText = loadingOverlay ? loadingOverlay.querySelector('.loading-text') : null;
+
+const vehicleInfoPanel = document.getElementById('vehicle-info-panel');
+const vehicleInfoFields = vehicleInfoPanel ? {
+  id: vehicleInfoPanel.querySelector('[data-vehicle-field="id"]'),
+  line: vehicleInfoPanel.querySelector('[data-vehicle-field="line"]'),
+  destination: vehicleInfoPanel.querySelector('[data-vehicle-field="destination"]'),
+  nextStop: vehicleInfoPanel.querySelector('[data-vehicle-field="next-stop"]')
+} : {};
+const vehicleTimelineElements = vehicleInfoPanel ? {
+  container: vehicleInfoPanel.querySelector('[data-vehicle-timeline-container]'),
+  steps: vehicleInfoPanel.querySelector('[data-vehicle-field="timeline"]'),
+  placeholder: vehicleInfoPanel.querySelector('[data-vehicle-timeline-placeholder]'),
+  toggleButton: vehicleInfoPanel.querySelector('[data-vehicle-timeline-toggle]')
+} : {};
+
+const vehicleTimelineState = {
+  isExpanded: false,
+  data: null,
+  message: DEFAULT_TIMELINE_MESSAGE,
+  key: null
+};
+
+if (vehicleTimelineElements.toggleButton) {
+  vehicleTimelineElements.toggleButton.addEventListener('click', () => {
+    if (!vehicleTimelineState.data) return;
+    vehicleTimelineState.isExpanded = !vehicleTimelineState.isExpanded;
+    renderVehicleTimeline(
+      vehicleTimelineState.data,
+      vehicleTimelineState.message,
+      { key: vehicleTimelineState.key, preserveState: true }
+    );
+  });
+}
+
+let selectedVehicleId = null;
+
+function setVehicleInfoField(element, value) {
+  if (!element) return;
+  const safeValue = value != null && value !== '' ? value : '-';
+  element.textContent = safeValue;
+}
+
+function renderVehicleTimeline(timelineData, message, options = {}) {
+  if (!vehicleTimelineElements.container || !vehicleTimelineElements.steps) return;
+  const { container, steps, placeholder, toggleButton } = vehicleTimelineElements;
+
+  const key = options && options.key != null ? String(options.key) : null;
+  const preserveState = !!(options && options.preserveState);
+  const keyChanged = key !== vehicleTimelineState.key;
+
+  if (!preserveState) {
+    if (keyChanged) {
+      vehicleTimelineState.isExpanded = false;
+    } else if (!key && timelineData !== vehicleTimelineState.data) {
+      vehicleTimelineState.isExpanded = false;
+    }
+  }
+
+  vehicleTimelineState.key = key;
+  vehicleTimelineState.data = timelineData;
+
+  steps.innerHTML = '';
+
+  let baseItems = null;
+  let allItems = null;
+  let fallbackMessage = message;
+
+  if (timelineData) {
+    if (Array.isArray(timelineData)) {
+      baseItems = timelineData;
+      allItems = timelineData;
+    } else {
+      baseItems = Array.isArray(timelineData.items) ? timelineData.items : null;
+      allItems = Array.isArray(timelineData.allItems) ? timelineData.allItems : baseItems;
+      if (!fallbackMessage && timelineData.message) {
+        fallbackMessage = timelineData.message;
+      }
+    }
+  }
+
+  const resolvedMessage = fallbackMessage || DEFAULT_TIMELINE_MESSAGE;
+  vehicleTimelineState.message = resolvedMessage;
+
+  const shouldExpand = vehicleTimelineState.isExpanded && allItems && allItems.length;
+  const itemsToRender = shouldExpand ? allItems : baseItems;
+  const hasItems = Array.isArray(itemsToRender) && itemsToRender.length > 0;
+
+  if (!hasItems) {
+    container.classList.remove('has-data');
+    container.classList.remove('is-expanded');
+    vehicleTimelineState.isExpanded = false;
+    if (placeholder) {
+      placeholder.textContent = resolvedMessage;
+    }
+    if (toggleButton) {
+      toggleButton.classList.add('is-hidden');
+      toggleButton.removeAttribute('aria-expanded');
+    }
+    return;
+  }
+
+  container.classList.add('has-data');
+  container.classList.toggle('is-expanded', !!shouldExpand);
+  if (placeholder) {
+    placeholder.textContent = '';
+  }
+
+  itemsToRender.forEach((item, index) => {
+    if (!item) return;
+    const stepEl = document.createElement('div');
+    const statusClass = item && item.status ? ` is-${item.status}` : '';
+    stepEl.className = `vehicle-timeline-step${statusClass}`;
+
+    const axisEl = document.createElement('div');
+    axisEl.className = 'vehicle-timeline-axis';
+
+    const topLine = document.createElement('span');
+    topLine.className = 'vehicle-timeline-axis-line';
+    if (index === 0) {
+      topLine.classList.add('is-hidden');
+    } else {
+      const prevItem = itemsToRender[index - 1];
+      if (prevItem && prevItem.status === 'past') {
+        topLine.classList.add('is-past');
+      } else {
+        topLine.classList.add('is-colored');
+      }
+    }
+
+    const dot = document.createElement('span');
+    dot.className = 'vehicle-timeline-dot';
+
+    const bottomLine = document.createElement('span');
+    bottomLine.className = 'vehicle-timeline-axis-line';
+    if (index === itemsToRender.length - 1) {
+      bottomLine.classList.add('is-hidden');
+    } else if (item && item.status === 'past') {
+      bottomLine.classList.add('is-past');
+    } else {
+      bottomLine.classList.add('is-colored');
+    }
+
+    axisEl.append(topLine, dot, bottomLine);
+
+    const stopEl = document.createElement('div');
+    stopEl.className = 'vehicle-timeline-stop';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'vehicle-timeline-name';
+    nameEl.textContent = item && item.name ? item.name : '-';
+
+    const timeEl = document.createElement('div');
+    timeEl.className = 'vehicle-timeline-time';
+
+    const scheduledSpan = document.createElement('span');
+    scheduledSpan.className = 'vehicle-timeline-time-scheduled';
+    scheduledSpan.textContent = item && item.scheduledText ? item.scheduledText : (item && item.time ? item.time : '-');
+
+    if (item && item.showEta && item.etaText) {
+      scheduledSpan.classList.add('is-overridden');
+      const etaSpan = document.createElement('span');
+      etaSpan.className = 'vehicle-timeline-time-eta';
+      if (item.isEarly) etaSpan.classList.add('is-early');
+      if (item.isLate) etaSpan.classList.add('is-late');
+      etaSpan.textContent = item.etaText;
+      timeEl.append(scheduledSpan, etaSpan);
+    } else {
+      timeEl.appendChild(scheduledSpan);
+    }
+
+    stopEl.append(nameEl, timeEl);
+    stepEl.append(axisEl, stopEl);
+    steps.appendChild(stepEl);
+  });
+
+  if (toggleButton) {
+    const canExpand = allItems && baseItems && allItems.length > baseItems.length;
+    toggleButton.classList.toggle('is-hidden', !canExpand);
+    if (canExpand) {
+      const expanded = !!shouldExpand;
+      toggleButton.textContent = expanded ? 'Reduire les arrets' : "Charger plus d'arrets";
+      toggleButton.setAttribute('aria-expanded', String(expanded));
+    } else {
+      toggleButton.removeAttribute('aria-expanded');
+    }
+  }
+}
+
+
+function updateVehicleInfoPanel(info) {
+  if (!vehicleInfoPanel) return;
+  vehicleInfoPanel.classList.remove('is-empty');
+  const payload = info || {};
+  setVehicleInfoField(vehicleInfoFields.id, payload.id);
+  setVehicleInfoField(vehicleInfoFields.line, payload.line);
+  setVehicleInfoField(vehicleInfoFields.destination, payload.destination);
+  setVehicleInfoField(vehicleInfoFields.nextStop, payload.nextStop);
+  const lineColor = payload.lineColor || DEFAULT_LINE_COLOR;
+  vehicleInfoPanel.style.setProperty('--vehicle-line-color', lineColor);
+  const timelineData = payload.timeline;
+  const timelineMessage = payload.timelineMessage || (timelineData && timelineData.message);
+  const timelineKey = payload.timelineKey != null ? String(payload.timelineKey) : (payload.id != null ? String(payload.id) : null);
+  renderVehicleTimeline(timelineData, timelineMessage, { key: timelineKey });
+}
+
+function handleVehicleSelection(vehicleId, info) {
+  selectedVehicleId = vehicleId;
+  updateVehicleInfoPanel(info);
+}
+
+function clearVehicleInfoPanel() {
+  if (!vehicleInfoPanel) return;
+  selectedVehicleId = null;
+  vehicleInfoPanel.classList.add('is-empty');
+  vehicleInfoPanel.style.setProperty('--vehicle-line-color', DEFAULT_LINE_COLOR);
+  setVehicleInfoField(vehicleInfoFields.id, '-');
+  setVehicleInfoField(vehicleInfoFields.line, '-');
+  setVehicleInfoField(vehicleInfoFields.destination, '-');
+  setVehicleInfoField(vehicleInfoFields.nextStop, '-');
+  vehicleTimelineState.isExpanded = false;
+  vehicleTimelineState.data = null;
+  vehicleTimelineState.key = null;
+  vehicleTimelineState.message = DEFAULT_TIMELINE_MESSAGE;
+  renderVehicleTimeline(null, DEFAULT_TIMELINE_MESSAGE);
+}
+
+function hideLoadingOverlay() {
+  if (!loadingOverlay) return;
+  loadingOverlay.classList.add('is-hidden');
+  setTimeout(() => {
+    if (loadingOverlay.parentElement) {
+      loadingOverlay.parentElement.removeChild(loadingOverlay);
+    }
+  }, 600);
+}
+
+function showLoadingOverlayError(message) {
+  if (!loadingOverlay) return;
+  if (loadingOverlaySpinner) loadingOverlaySpinner.classList.add('is-hidden');
+  if (loadingOverlayText) loadingOverlayText.textContent = message || 'Impossible de charger les données.';
+  loadingOverlay.classList.remove('is-hidden');
+  loadingOverlay.classList.add('has-error');
+}
+
+function normalizeTimeValue(value) {
+  if (value == null || value === '') return '';
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const totalSeconds = Math.round(value * 86400);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  const str = String(value).trim();
+  if (!str) return '';
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(str)) {
+    const [h, m, s = '00'] = str.split(':');
+    return `${h.padStart(2, '0')}:${m.padStart(2, '0')}:${s.padStart(2, '0')}`;
+  }
+  return str;
+}
+
+function formatGtfsTime(value) {
+  if (value == null || value === '') return '-';
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return formatGtfsTime(normalizeTimeValue(value));
+  }
+  const str = String(value).trim();
+  if (!str) return '-';
+  const parts = str.split(':');
+  if (parts.length < 2) return str;
+  let hours = Number(parts[0]);
+  const minutes = Number(parts[1]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return str;
+  const dayOffset = Math.floor(hours / 24);
+  hours = ((hours % 24) + 24) % 24;
+  const formatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  if (dayOffset > 0) {
+    return `${formatted}+${dayOffset}`;
+  }
+  return formatted;
+}
+
+function toRadians(deg) {
+  return deg * Math.PI / 180;
+}
+
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  if ([lat1, lon1, lat2, lon2].some(v => v == null || Number.isNaN(v))) return null;
+  const R = 6371000; // metres
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function timeStringToSeconds(str) {
+  if (!str) return null;
+  const parts = String(str).split(':');
+  if (parts.length < 2) return null;
+  const [h, m, s = '0'] = parts;
+  const hours = Number(h);
+  const minutes = Number(m);
+  const seconds = Number(s);
+  if ([hours, minutes, seconds].some(v => !Number.isFinite(v))) return null;
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+function getSecondsSinceMidnight(date) {
+  return date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds();
+}
+
+function alignScheduleSeconds(value, referenceSeconds) {
+  if (value == null) return null;
+  if (referenceSeconds == null) return value;
+  const DAY = 86400;
+  let adjusted = value;
+  while (adjusted - referenceSeconds < -DAY / 2) adjusted += DAY;
+  while (adjusted - referenceSeconds > DAY / 2) adjusted -= DAY;
+  return adjusted;
+}
+
+function formatClockFromAbsoluteSeconds(seconds) {
+  if (seconds == null || Number.isNaN(seconds)) return '-';
+  const DAY = 86400;
+  let dayOffset = 0;
+  let s = seconds;
+  if (s < 0) {
+    dayOffset = Math.ceil(-s / DAY);
+    s += dayOffset * DAY;
+    dayOffset = -dayOffset;
+  } else if (s >= DAY) {
+    dayOffset = Math.floor(s / DAY);
+    s -= dayOffset * DAY;
+  }
+  const hours = Math.floor(s / 3600);
+  const minutes = Math.floor((s % 3600) / 60);
+  const formatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  return dayOffset ? `${formatted}+${dayOffset}` : formatted;
+}
+
+function getStopCoordinates(stopId) {
+  if (stopId == null) return null;
+  const key = String(stopId);
+  if (stopCoords[key]) return stopCoords[key];
+  const normalized = key.replace(/^0+/, '') || '0';
+  if (stopCoords[normalized]) return stopCoords[normalized];
+  return null;
+}
+
+function getStopDisplayName(stopId) {
+  if (stopId == null) return '-';
+  const raw = String(stopId);
+  if (stopNames[raw]) return stopNames[raw];
+  const normalized = raw.replace(/^0+/, '') || '0';
+  return stopNames[normalized] || raw;
+}
+
+function getTripStopsByTripId(tripId) {
+  if (tripId == null) return null;
+  const raw = String(tripId);
+  if (tripStopTimesMap.has(raw)) return tripStopTimesMap.get(raw);
+  const normalized = raw.replace(/^0+/, '') || '0';
+  if (tripStopTimesMap.has(normalized)) return tripStopTimesMap.get(normalized);
+  return null;
+}
+
+function buildVehicleTimelineData(tripId, nextStopId, fallbackStopId, vehiclePosition, referenceSeconds) {
+  const stops = getTripStopsByTripId(tripId);
+  if (!stops || !stops.length) {
+    return { items: null, allItems: null, message: DEFAULT_TIMELINE_MESSAGE };
+  }
+
+  const candidates = [];
+  const pushCandidate = value => {
+    if (value == null || value === '') return;
+    const str = String(value);
+    if (!str) return;
+    candidates.push(str);
+    const trimmed = str.replace(/^0+/, '') || '0';
+    if (trimmed !== str) candidates.push(trimmed);
+  };
+  pushCandidate(nextStopId);
+  pushCandidate(fallbackStopId);
+
+  let currentIndex = -1;
+  for (const candidate of candidates) {
+    currentIndex = stops.findIndex(entry => entry.stopId === candidate);
+    if (currentIndex !== -1) break;
+  }
+  if (currentIndex === -1) {
+    currentIndex = 0;
+  }
+
+  const createEntry = (stop, status) => {
+    if (!stop) return null;
+    const stopId = stop.stopId;
+    if (!stopId) return null;
+    const scheduledRaw = stop.departureTime || stop.arrivalTime || '';
+    const scheduledSeconds = stop.departureSeconds != null
+      ? stop.departureSeconds
+      : (stop.arrivalSeconds != null ? stop.arrivalSeconds : timeStringToSeconds(scheduledRaw));
+    return {
+      status,
+      stopId,
+      name: getStopDisplayName(stopId),
+      scheduledRaw,
+      scheduledSeconds,
+      scheduledText: formatGtfsTime(scheduledRaw),
+      rawStop: stop
+    };
+  };
+
+  const fullItems = [];
+  stops.forEach((stop, idx) => {
+    const status = idx < currentIndex ? 'past' : (idx === currentIndex ? 'current' : 'upcoming');
+    const entry = createEntry(stop, status);
+    if (entry) {
+      fullItems.push(entry);
+    }
+  });
+
+  if (!fullItems.length) {
+    return { items: null, allItems: null, message: DEFAULT_TIMELINE_MESSAGE };
+  }
+
+  if (!fullItems.some(item => item.status === 'current')) {
+    const lastItem = fullItems[fullItems.length - 1];
+    if (lastItem) {
+      lastItem.status = 'current';
+    }
+  }
+
+  const summaryItems = [];
+  if (currentIndex > 0 && fullItems[currentIndex - 1]) {
+    summaryItems.push(fullItems[currentIndex - 1]);
+  }
+
+  const MAX_VISIBLE_UPCOMING = 4;
+  let upcomingCount = 0;
+  for (let idx = Math.max(currentIndex, 0); idx < fullItems.length && upcomingCount < MAX_VISIBLE_UPCOMING; idx++) {
+    const entry = fullItems[idx];
+    if (!entry) continue;
+    summaryItems.push(entry);
+    upcomingCount++;
+  }
+
+  const nowSeconds = Number.isFinite(referenceSeconds) ? referenceSeconds : getSecondsSinceMidnight(new Date());
+  const currentEntry = fullItems[currentIndex] || fullItems.find(item => item.status === 'current') || null;
+  const pastEntry = currentIndex > 0 ? fullItems[currentIndex - 1] : null;
+
+  let etaBaseSeconds = null;
+  let delaySeconds = null;
+  let distanceToCurrent = null;
+
+  if (currentEntry && vehiclePosition && Number.isFinite(vehiclePosition.lat) && Number.isFinite(vehiclePosition.lon)) {
+    const currentCoords = getStopCoordinates(currentEntry.stopId);
+    if (currentCoords) {
+      distanceToCurrent = haversineDistance(vehiclePosition.lat, vehiclePosition.lon, currentCoords.lat, currentCoords.lon);
+      if (distanceToCurrent != null) {
+        let segmentSpeed = DEFAULT_SPEED_M_S;
+        if (pastEntry && pastEntry.rawStop) {
+          const prevCoords = getStopCoordinates(pastEntry.stopId);
+          const prevSeconds = pastEntry.rawStop.departureSeconds ?? pastEntry.rawStop.arrivalSeconds ?? null;
+          const currentSeconds = currentEntry.rawStop.arrivalSeconds ?? currentEntry.rawStop.departureSeconds ?? null;
+          let segmentSeconds = null;
+          if (currentSeconds != null && prevSeconds != null) {
+            segmentSeconds = currentSeconds - prevSeconds;
+            if (segmentSeconds <= 0) segmentSeconds += 86400;
+          }
+          if (prevCoords) {
+            const segmentDistance = haversineDistance(prevCoords.lat, prevCoords.lon, currentCoords.lat, currentCoords.lon);
+            if (segmentDistance && segmentSeconds && segmentSeconds > 0) {
+              const computedSpeed = segmentDistance / segmentSeconds;
+              if (computedSpeed > 0.5) {
+                segmentSpeed = Math.min(Math.max(computedSpeed, MIN_SPEED_M_S), 35);
+              }
+            }
+          }
+        }
+        const speed = Math.max(segmentSpeed, MIN_SPEED_M_S);
+        let travelSeconds = 0;
+        if (distanceToCurrent > 5) {
+          travelSeconds = distanceToCurrent / speed;
+          if (!Number.isFinite(travelSeconds) || travelSeconds < 0) travelSeconds = 0;
+        }
+        etaBaseSeconds = nowSeconds + travelSeconds;
+        const scheduledSeconds = alignScheduleSeconds(currentEntry.scheduledSeconds, nowSeconds);
+        if (scheduledSeconds != null) {
+          delaySeconds = etaBaseSeconds - scheduledSeconds;
+          currentEntry.etaSeconds = etaBaseSeconds;
+          currentEntry.etaText = formatClockFromAbsoluteSeconds(etaBaseSeconds);
+          currentEntry.showEta = Math.abs(delaySeconds) > DELAY_THRESHOLD_SECONDS;
+          currentEntry.isLate = delaySeconds > DELAY_THRESHOLD_SECONDS;
+          currentEntry.isEarly = delaySeconds < -DELAY_THRESHOLD_SECONDS;
+          currentEntry.delaySeconds = delaySeconds;
+          currentEntry.scheduledAligned = scheduledSeconds;
+        }
+      }
+    }
+  }
+
+  const isAtTripOrigin = currentEntry && !pastEntry && distanceToCurrent != null && distanceToCurrent < 40
+    && ((currentEntry.rawStop && Number.isFinite(currentEntry.rawStop.sequence)
+      && currentEntry.rawStop.sequence <= 1) || currentIndex <= 0);
+  if (isAtTripOrigin && delaySeconds != null && delaySeconds < -DELAY_THRESHOLD_SECONDS) {
+    delaySeconds = 0;
+    if (currentEntry) {
+      currentEntry.showEta = false;
+      currentEntry.isEarly = false;
+      currentEntry.delaySeconds = 0;
+    }
+  }
+
+  fullItems.forEach(item => {
+    item.scheduledText = item.scheduledText || formatGtfsTime(item.scheduledRaw);
+    if (item.status === 'past') {
+      item.showEta = false;
+      return;
+    }
+    if (delaySeconds != null && item.scheduledSeconds != null && etaBaseSeconds != null) {
+      const aligned = alignScheduleSeconds(item.scheduledSeconds, nowSeconds);
+      if (aligned != null) {
+        const etaSeconds = aligned + delaySeconds;
+        item.etaSeconds = etaSeconds;
+        item.etaText = formatClockFromAbsoluteSeconds(etaSeconds);
+        const diff = Math.abs(etaSeconds - aligned);
+        item.showEta = diff > DELAY_THRESHOLD_SECONDS;
+        item.isLate = etaSeconds - aligned > DELAY_THRESHOLD_SECONDS;
+        item.isEarly = aligned - etaSeconds > DELAY_THRESHOLD_SECONDS;
+        item.delaySeconds = etaSeconds - aligned;
+      }
+    }
+  });
+
+  fullItems.forEach(item => {
+    if (item.showEta && !item.etaText) {
+      item.showEta = false;
+    }
+  });
+
+  return {
+    items: summaryItems,
+    allItems: fullItems
+  };
+}
+function hydrateStopTimesMap(arrayBuffer) {
+  tripStopTimesMap.clear();
+  if (!arrayBuffer) return;
+
+  try {
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    const sheetName = workbook.SheetNames.find(name => name && name.toLowerCase().includes('stop')) || workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) return;
+
+    const rows = XLSX.utils.sheet_to_json(sheet, { raw: true });
+    rows.forEach(row => {
+      const tripVal = row.trip_id ?? row.TRIP_ID ?? row['trip id'] ?? row['Trip ID'];
+      const stopVal = row.stop_id ?? row.STOP_ID ?? row['stop id'] ?? row['Stop ID'];
+      const sequenceVal = row.stop_sequence ?? row.STOP_SEQUENCE ?? row['stop sequence'] ?? row['Stop Sequence'];
+      if (tripVal == null || stopVal == null || sequenceVal == null) return;
+
+      const tripKey = String(tripVal);
+      const tripKeyNoZ = tripKey.replace(/^0+/, '') || '0';
+      const stopId = String(stopVal);
+      const sequenceNumber = Number(sequenceVal);
+      if (!Number.isFinite(sequenceNumber)) return;
+
+      const departureRaw = row.departure_time ?? row.DEPARTURE_TIME ?? row['departure time'] ?? row['Departure Time'];
+      const arrivalRaw = row.arrival_time ?? row.ARRIVAL_TIME ?? row['arrival time'] ?? row['Arrival Time'];
+      const departureNormalized = normalizeTimeValue(departureRaw ?? arrivalRaw ?? '');
+      const arrivalNormalized = normalizeTimeValue(arrivalRaw ?? departureRaw ?? '');
+      const entry = {
+        stopId,
+        sequence: sequenceNumber,
+        departureTime: departureNormalized,
+        arrivalTime: arrivalNormalized,
+        departureSeconds: timeStringToSeconds(departureNormalized),
+        arrivalSeconds: timeStringToSeconds(arrivalNormalized)
+      };
+
+      let targetList;
+      if (tripStopTimesMap.has(tripKey)) {
+        targetList = tripStopTimesMap.get(tripKey);
+      } else if (tripKey !== tripKeyNoZ && tripStopTimesMap.has(tripKeyNoZ)) {
+        targetList = tripStopTimesMap.get(tripKeyNoZ);
+        tripStopTimesMap.set(tripKey, targetList);
+      } else {
+        targetList = [];
+        tripStopTimesMap.set(tripKey, targetList);
+      }
+      if (tripKey !== tripKeyNoZ && !tripStopTimesMap.has(tripKeyNoZ)) {
+        tripStopTimesMap.set(tripKeyNoZ, targetList);
+      }
+
+      targetList.push(entry);
+    });
+
+    const sorted = new Set();
+    tripStopTimesMap.forEach(list => {
+      if (sorted.has(list)) return;
+      list.sort((a, b) => a.sequence - b.sequence);
+      sorted.add(list);
+    });
+  } catch (error) {
+    console.warn('Impossible de lire irigo_stop_times.xlsx :', error);
+  }
+}
+
+
+
+if (vehicleInfoPanel) {
+  document.addEventListener('click', event => {
+    if (vehicleInfoPanel.classList.contains('is-empty')) return;
+    const target = event.target;
+    if (vehicleInfoPanel.contains(target)) return;
+    if (target.closest('.leaflet-popup') || target.closest('.leaflet-marker-icon')) return;
+    if (target.closest('.leaflet-control') || target.closest('.maptool-ignore-close')) return;
+    if (target.closest('#map')) return;
+    clearVehicleInfoPanel();
+  });
+}
 
 
 // ==================================
@@ -252,21 +887,41 @@ function getTramIcon(color) {
 Promise.all([
   fetch('horaires-theoriques-et-arrets-du-reseau-irigo-gtfs.json').then(r => r.json()),
   fetch('irigo_gtfs_lines.geojson').then(r => r.json()),
-  // Tente d'abord irigo_trips.xlsx, puis fallback sur l'extension mal orthographiée .xlxs
+  // Tente d'abord irigo_trips.xlsx, puis fallback sur l'extension mal orthographiee .xlxs
   fetch('irigo_trips.xlsx')
     .then(res => res.ok ? res : fetch('irigo_trips.xlxs'))
     .then(res => {
       if (!res || !res.ok) throw new Error(`HTTP ${res ? res.status : 'no response'}`);
       return res.arrayBuffer();
+    }),
+  // Meme traitement pour les horaires des arrets
+  fetch('irigo_stop_times.xlsx')
+    .then(res => res.ok ? res : fetch('irigo_stop_times.xlxs'))
+    .then(res => {
+      if (!res || !res.ok) throw new Error(`HTTP ${res ? res.status : 'no response'}`);
+      return res.arrayBuffer();
     })
 ])
-.then(([stops, geojson, tripsArrayBuffer]) => {
+.then(([stops, geojson, tripsArrayBuffer, stopTimesArrayBuffer]) => {
   stopsData = stops;
   linesGeoJSON = geojson;
   irigo_trips = tripsArrayBuffer;
 
-  // Construire stopNames et lineColors
-  stops.forEach(s => stopNames[s.stop_id] = s.stop_name);
+  hydrateStopTimesMap(stopTimesArrayBuffer);
+
+  // Construire stopNames/coords et lineColors
+  stops.forEach(s => {
+    if (!s || s.stop_id == null) return;
+    const sid = String(s.stop_id);
+    const sidNoZ = sid.replace(/^0+/, '') || '0';
+    stopNames[sid] = s.stop_name;
+    if (!(sidNoZ in stopNames)) stopNames[sidNoZ] = s.stop_name;
+    if (s.stop_coordinates && Number.isFinite(s.stop_coordinates.lat) && Number.isFinite(s.stop_coordinates.lon)) {
+      const coords = { lat: Number(s.stop_coordinates.lat), lon: Number(s.stop_coordinates.lon) };
+      stopCoords[sid] = coords;
+      if (!(sidNoZ in stopCoords)) stopCoords[sidNoZ] = coords;
+    }
+  });
   geojson.features.forEach(f => {
     const rid = f.properties.route_id;
     lineColors[rid] = f.properties.route_color;
@@ -401,10 +1056,13 @@ Promise.all([
   // Initial render
   updateLines();
   initStopsLayer();
-  updateVehicles();
+  updateVehicles().finally(() => hideLoadingOverlay());
   setInterval(updateVehicles, UPDATE_INTERVAL_MS);
 })
-.catch(err => console.error('Échec chargement initial :', err));
+.catch(err => {
+  console.error('Échec chargement initial :', err);
+  showLoadingOverlayError('Impossible de charger les données. Veuillez réessayer plus tard.');
+});
 
 
 // ==================================
@@ -497,41 +1155,76 @@ async function chargerVehicules() {
   markers.forEach(m => map.removeLayer(m));
   markers = [];
   let trackedMarker = null;
+  let selectedVehicleStillVisible = false;
   try {
     const resp = await fetch('https://web-production-c4b0.up.railway.app/vehicules-irigo.json');
     //const resp = await fetch('http://localhost:5000/vehicules-irigo.json');
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
+    const referenceSeconds = getSecondsSinceMidnight(new Date());
     data.forEach(v => {
-      let rid = v.route_id ?? '';
-      if (!selectedRoutes.has(rid)) return;
-      const color = lineColors[rid] || '3388ff';
-      const icon  = ['A','B','C'].includes(rid)
-        ? getTramIcon(color)
-        : getBusIcon(color);
-      let busid = v.id;
-      if (busid.length > 4) busid = 'Bus Suburbain';
-      if (rid >= 20 && rid <= 25) rid = `E${rid}`;
+      const rawRouteId = v.route_id != null ? String(v.route_id) : '';
+      if (!selectedRoutes.has(rawRouteId)) return;
 
-      const key = v.trip_id != null ? String(v.trip_id) : '';
-      const keyNoZ = (key.replace(/^0+/, '') || '0');
-      const headsign = window.tripHeadsignMap[key] ?? window.tripHeadsignMap[keyNoZ] ?? '—';
+      const colorValue = lineColors[rawRouteId] || '3388ff';
+      const sanitizedColor = String(colorValue).replace(/^#/, '');
+      const icon = ['A','B','C'].includes(rawRouteId)
+        ? getTramIcon(sanitizedColor)
+        : getBusIcon(sanitizedColor);
 
-      console.log(v)
+      let displayLine = rawRouteId;
+      const numericRoute = Number(rawRouteId);
+      if (!Number.isNaN(numericRoute) && numericRoute >= 20 && numericRoute <= 25) {
+        displayLine = `E${rawRouteId}`;
+      }
+
+      let busLabel = v.id;
+      if (busLabel && busLabel.length > 4) busLabel = 'Bus Suburbain';
+
+      const tripKey = v.trip_id != null ? String(v.trip_id) : '';
+      const tripKeyNoZ = tripKey.replace(/^0+/, '') || '0';
+      const headsign = window.tripHeadsignMap[tripKey] ?? window.tripHeadsignMap[tripKeyNoZ] ?? '-';
+
+      const nextStopId = v.next_stop != null ? v.next_stop : v.stop_id;
+      const fallbackStopId = v.stop_id;
+      const nextStopName = getStopDisplayName(nextStopId);
+      const timelineResult = buildVehicleTimelineData(
+        tripKey || tripKeyNoZ,
+        nextStopId,
+        fallbackStopId,
+        { lat: Number(v.latitude), lon: Number(v.longitude) },
+        referenceSeconds
+      );
+      const timelineMessage = timelineResult ? timelineResult.message : undefined;
+      const candidateLineColor = `#${sanitizedColor}`;
+      const lineColorHex = /^#[0-9a-fA-F]{3,8}$/.test(candidateLineColor) ? candidateLineColor : DEFAULT_LINE_COLOR;
+
+      const infoPayload = {
+        id: busLabel,
+        line: displayLine || '-',
+        destination: headsign,
+        nextStop: nextStopName,
+        lineColor: lineColorHex,
+        timeline: timelineResult,
+        timelineMessage,
+        timelineKey: v.id != null ? String(v.id) : null
+      };
 
       const followLabel = trackedBusId === v.id
-        ? 'Arrêter le suivi'
+        ? 'Arreter le suivi'
         : 'Suivre ce véhicule';
-      const popupHtml =
-        `ID : ${busid}<br>` +
-        `Ligne : ${rid || '—'}<br>` +
-        `Destination : ${headsign}<br>` +
-        `Prochain Arrêt : ${stopNames[v.stop_id] || '—'}<br>` +
-        `<button class="follow-btn" data-id="${v.id}">${followLabel}</button>`;
+      const popupHtml = `
+        <div class="vehicle-popup">
+          <button class="follow-btn" data-id="${v.id}">${followLabel}</button>
+        </div>
+      `.trim();
+
       const m = L.marker([v.latitude, v.longitude], { icon })
         .addTo(map)
         .bindPopup(popupHtml);
+
       m.on('popupopen', e => {
+        handleVehicleSelection(v.id, infoPayload);
         const btn = e.popup.getElement().querySelector('.follow-btn');
         if (!btn) return;
         btn.addEventListener('click', () => {
@@ -544,24 +1237,33 @@ async function chargerVehicules() {
           } else {
             trackedBusId = v.id;
             trackedPopupOpen = true;
-            trackedBusLabel = busid;
-            btn.textContent = 'Arrêter le suivi';
+            trackedBusLabel = busLabel;
+            btn.textContent = 'Arreter le suivi';
             updateTrackHint();
             map.setView(m.getLatLng(), map.getZoom());
           }
         });
       });
+
+      if (selectedVehicleId === v.id) {
+        selectedVehicleStillVisible = true;
+        updateVehicleInfoPanel(infoPayload);
+      }
+
       markers.push(m);
       if (trackedBusId === v.id) {
-        trackedMarker = m;  
+        trackedMarker = m;
       }
     });
+
+    if (selectedVehicleId && !selectedVehicleStillVisible) {
+      clearVehicleInfoPanel();
+    }
+
     if (trackedMarker) {
       trackedMarker.openPopup();
       map.setView(trackedMarker.getLatLng(), map.getZoom());
-      map.setView(m.getLatLng(), map.getZoom());
     } else if (trackedBusId) {
-      // Le véhicule suivi n'est plus présent
       trackedBusId = null;
       trackedBusLabel = null;
       trackedPopupOpen = false;
@@ -571,6 +1273,8 @@ async function chargerVehicules() {
     console.warn('Impossible de charger les véhicules :', e);
   }
 }
+
+
 
 async function updateVehicles() {
   remainingTime = UPDATE_INTERVAL_MS / 1000;

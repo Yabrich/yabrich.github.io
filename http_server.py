@@ -5,7 +5,7 @@ import os
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 # Change directory to the one to serve"
-#os.chdir(r"C:\Users\Yabrich\Documents\Dev\python_ws\yabrich.github.io-main")
+#os.chdir(r"C:\Users\Yael\Documents\Test_old\yabrich.github.io-27183b33406336bce0d49558ab09077ef99096a1")
 
 PORT = 8000
 HOST = ""

@@ -3,6 +3,61 @@ import * as XLSX from 'https://cdn.sheetjs.com/xlsx-0.19.0/package/xlsx.mjs';
 // Dynamically inject CSS for styled checkboxes
 const styleEl = document.createElement('style');
 styleEl.textContent = `
+/* ====== MOBILE (bottom sheet) ====== */
+@media (max-width: 768px) {
+  #vehicle-info-panel{
+    position: fixed;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0) + 10px);
+    transform: translateX(-50%);
+    width: min(700px, 94vw);
+    max-height: 58vh;
+    overflow: auto;
+    padding: 10px 12px;
+    font-size: 14px;
+    line-height: 1.25;
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    backdrop-filter: blur(6px);
+    z-index: 1200; /* au-dessus des contrôles leaflet */
+  }
+
+  /* poignée + bouton fermer */
+  #vehicle-info-panel .sheet-grip{
+    width: 40px; height: 4px; border-radius: 2px;
+    background: rgba(0,0,0,.25);
+    margin: -2px auto 8px;
+  }
+  #vehicle-info-panel .close-btn{
+    position: absolute; right: 8px; top: 8px;
+    border: 0; background: transparent; font-size: 22px;
+    line-height: 1; opacity: .6; cursor: pointer;
+  }
+
+  /* mode replié */
+  #vehicle-info-panel.is-collapsed{
+    max-height: 110px; overflow: hidden;
+  }
+  #vehicle-info-panel.is-collapsed::after{
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 36px;
+    background: linear-gradient(transparent, rgba(255,255,255,.9));
+    pointer-events: none;
+  }
+
+  /* resserrer la timeline et la typo */
+  .vehicle-timeline-step{ margin: 6px 0; }
+  .vehicle-timeline-name{ font-size: 14px; }
+  .vehicle-timeline-time{ font-size: 13px; }
+
+  /* boutons plus petits */
+  #toggle-all-btn, #locate_btn{
+    padding: 6px 10px; font-size: 14px;
+  }
+
+  /* cases à cocher plus compactes */
+  .checkbox-wrapper label{ padding-left: 24px; font-weight: 600; }
+  .checkbox-wrapper label:before{ width: 18px; height: 18px; }
+}
 .checkbox-wrapper {
   display: flex;
   align-items: center;
@@ -193,6 +248,9 @@ const loadingOverlaySpinner = loadingOverlay ? loadingOverlay.querySelector('.lo
 const loadingOverlayText = loadingOverlay ? loadingOverlay.querySelector('.loading-text') : null;
 
 const vehicleInfoPanel = document.getElementById('vehicle-info-panel');
+
+
+
 const vehicleInfoFields = vehicleInfoPanel ? {
   id: vehicleInfoPanel.querySelector('[data-vehicle-field="id"]'),
   line: vehicleInfoPanel.querySelector('[data-vehicle-field="line"]'),
@@ -811,7 +869,7 @@ if (vehicleInfoPanel) {
     if (vehicleInfoPanel.contains(target)) return;
     if (target.closest('.leaflet-popup') || target.closest('.leaflet-marker-icon')) return;
     if (target.closest('.leaflet-control') || target.closest('.maptool-ignore-close')) return;
-    if (target.closest('#map')) return;
+    //if (target.closest('#map')) return;
     clearVehicleInfoPanel();
   });
 }

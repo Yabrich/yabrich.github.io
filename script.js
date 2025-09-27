@@ -193,6 +193,7 @@ const loadingOverlaySpinner = loadingOverlay ? loadingOverlay.querySelector('.lo
 const loadingOverlayText = loadingOverlay ? loadingOverlay.querySelector('.loading-text') : null;
 
 const vehicleInfoPanel = document.getElementById('vehicle-info-panel');
+const vehicleInfoToggle = vehicleInfoPanel ? vehicleInfoPanel.querySelector('[data-vehicle-info-toggle]') : null;
 
 const vehicleInfoFields = vehicleInfoPanel ? {
   id: vehicleInfoPanel.querySelector('[data-vehicle-field="id"]'),
@@ -225,6 +226,31 @@ if (vehicleTimelineElements.toggleButton) {
     );
   });
 }
+
+const vehicleInfoUIState = {
+  isCollapsed: false
+};
+
+function applyVehicleInfoCollapseState() {
+  if (!vehicleInfoPanel) return;
+  const isEmpty = vehicleInfoPanel.classList.contains('is-empty');
+  const shouldCollapse = vehicleInfoUIState.isCollapsed && !isEmpty;
+  vehicleInfoPanel.classList.toggle('is-collapsed', shouldCollapse);
+  if (vehicleInfoToggle) {
+    vehicleInfoToggle.disabled = isEmpty;
+    vehicleInfoToggle.setAttribute('aria-expanded', String(!shouldCollapse));
+  }
+}
+
+if (vehicleInfoToggle) {
+  vehicleInfoToggle.addEventListener('click', () => {
+    if (vehicleInfoPanel.classList.contains('is-empty')) return;
+    vehicleInfoUIState.isCollapsed = !vehicleInfoUIState.isCollapsed;
+    applyVehicleInfoCollapseState();
+  });
+}
+
+applyVehicleInfoCollapseState();
 
 let selectedVehicleId = null;
 
@@ -395,6 +421,7 @@ function updateVehicleInfoPanel(info) {
   const timelineMessage = payload.timelineMessage || (timelineData && timelineData.message);
   const timelineKey = payload.timelineKey != null ? String(payload.timelineKey) : (payload.id != null ? String(payload.id) : null);
   renderVehicleTimeline(timelineData, timelineMessage, { key: timelineKey });
+  applyVehicleInfoCollapseState();
 }
 
 function handleVehicleSelection(vehicleId, info) {
@@ -416,6 +443,7 @@ function clearVehicleInfoPanel() {
   vehicleTimelineState.key = null;
   vehicleTimelineState.message = DEFAULT_TIMELINE_MESSAGE;
   renderVehicleTimeline(null, DEFAULT_TIMELINE_MESSAGE);
+  applyVehicleInfoCollapseState();
 }
 
 function hideLoadingOverlay() {
@@ -812,7 +840,7 @@ if (vehicleInfoPanel) {
     if (vehicleInfoPanel.contains(target)) return;
     if (target.closest('.leaflet-popup') || target.closest('.leaflet-marker-icon')) return;
     if (target.closest('.leaflet-control') || target.closest('.maptool-ignore-close')) return;
-    //if (target.closest('#map')) return;
+    if (target.closest('#map')) return;
     clearVehicleInfoPanel();
   });
 }

@@ -181,7 +181,7 @@
 
     #vehicle-info-panel {
       position: absolute;
-      top: 10px;
+      top: 90px;
       left: 10px;
       width: 260px;
       z-index: 1000;
@@ -196,6 +196,17 @@
       flex-direction: column;
       gap: 12px;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    #vehicle-info-panel.is-collapsed {
+      padding-top: 12px;
+      padding-bottom: 12px;
+      gap: 0;
+    }
+    #vehicle-info-panel.is-collapsed .vehicle-info-content {
+      gap: 0;
+    }
+    #vehicle-info-panel.is-collapsed .vehicle-info-content > :not(.vehicle-info-header) {
+      display: none;
     }
     #vehicle-info-panel:hover {
       transform: translateY(-1px);
@@ -222,8 +233,37 @@
     #vehicle-info-panel .vehicle-info-header {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
+      align-items: center;
       gap: 12px;
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 0;
+      font: inherit;
+      color: inherit;
+      cursor: pointer;
+    }
+    #vehicle-info-panel .vehicle-info-header:disabled {
+      cursor: default;
+    }
+    #vehicle-info-panel .vehicle-info-header:focus-visible {
+      outline: 2px solid #564dd7;
+      outline-offset: 2px;
+    }
+    #vehicle-info-panel .vehicle-info-toggle-indicator {
+      width: 10px;
+      height: 10px;
+      margin-left: 8px;
+      border-right: 2px solid #564dd7;
+      border-bottom: 2px solid #564dd7;
+      transform: rotate(45deg);
+      transition: transform 0.2s ease;
+    }
+    #vehicle-info-panel .vehicle-info-header[aria-expanded="false"] .vehicle-info-toggle-indicator {
+      transform: rotate(-135deg);
+    }
+    #vehicle-info-panel .vehicle-info-header:disabled .vehicle-info-toggle-indicator {
+      opacity: 0.4;
     }
     #vehicle-info-panel .vehicle-info-badge {
       font-size: 11px;
@@ -236,6 +276,8 @@
       font-size: 22px;
       font-weight: 700;
       color: #121212;
+      flex: 1;
+      text-align: right;
     }
     #vehicle-info-panel .vehicle-info-row {
       display: flex;
@@ -483,6 +525,9 @@
     body.dark-mode #vehicle-info-panel .vehicle-info-badge {
       color: #8f88ff;
     }
+    body.dark-mode #vehicle-info-panel .vehicle-info-toggle-indicator {
+      border-color: #d0d3ff;
+    }
     body.dark-mode #vehicle-info-panel .vehicle-info-id {
       color: #ffffff;
     }
@@ -562,11 +607,12 @@
   <div id="map"></div>
   <div id="vehicle-info-panel" class="is-empty">
     <div class="vehicle-info-placeholder"></div>
-    <div class="vehicle-info-content">
-      <div class="vehicle-info-header">
+    <div class="vehicle-info-content" id="vehicle-info-panel-content">
+      <button type="button" class="vehicle-info-header" data-vehicle-info-toggle aria-expanded="true" aria-controls="vehicle-info-panel-content">
         <span class="vehicle-info-badge">Véhicule n°</span>
         <span class="vehicle-info-id" data-vehicle-field="id">-</span>
-      </div>
+        <span class="vehicle-info-toggle-indicator" aria-hidden="true"></span>
+      </button>
       <div class="vehicle-info-divider"></div>
       <div class="vehicle-info-row">
         <span class="vehicle-info-label">Ligne</span>

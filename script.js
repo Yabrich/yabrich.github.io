@@ -1,4 +1,4 @@
-import * as XLSX from 'https://cdn.sheetjs.com/xlsx-0.19.0/package/xlsx.mjs';
+﻿import * as XLSX from 'https://cdn.sheetjs.com/xlsx-0.19.0/package/xlsx.mjs';
 
 // Dynamically inject CSS for styled checkboxes
 const styleEl = document.createElement('style');
@@ -73,10 +73,12 @@ let lightTileLayer, darkTileLayer;
 // Fonction pour initialiser les deux tile layers
 function initTileLayers() {
   lightTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    minZoom: 10,
     maxZoom: 18,
     attribution: '© OpenStreetMap'
   });
   darkTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    minZoom: 10,
     maxZoom: 18,
     attribution: '© CartoDB Dark Matter'
   });
@@ -163,7 +165,7 @@ let selectedRoutes = loadSelectedRoutes();
 let linesGeoJSON, stopsData, irigo_trips;
 let lineColors = {}; // Couleur par ligne
 let stopNames = {}; // Nom par identifiant de station
-let stopCoords = {}; // Coordonnees par station
+let stopCoords = {}; // Coordonnées par station
 let linesLayer;
 let locateMarker; // Marker used for the "Me localiser" feature
 let trackedBusId = null; // ID du bus actuellement suivi
@@ -194,6 +196,13 @@ const loadingOverlayText = loadingOverlay ? loadingOverlay.querySelector('.loadi
 
 const vehicleInfoPanel = document.getElementById('vehicle-info-panel');
 const vehicleInfoToggle = vehicleInfoPanel ? vehicleInfoPanel.querySelector('[data-vehicle-info-toggle]') : null;
+const vehicleInfoBadge = vehicleInfoPanel ? vehicleInfoPanel.querySelector('.vehicle-info-badge') : null;
+const DEFAULT_VEHICLE_BADGE_LABEL = 'V\u00e9hicule n\u00b0';
+const TRAM_LINE_CODES = new Set(['A','B','C']);
+
+if (vehicleInfoBadge) {
+  vehicleInfoBadge.textContent = DEFAULT_VEHICLE_BADGE_LABEL;
+}
 
 const vehicleInfoFields = vehicleInfoPanel ? {
   id: vehicleInfoPanel.querySelector('[data-vehicle-field="id"]'),
@@ -398,7 +407,7 @@ function renderVehicleTimeline(timelineData, message, options = {}) {
     toggleButton.classList.toggle('is-hidden', !canExpand);
     if (canExpand) {
       const expanded = !!shouldExpand;
-      toggleButton.textContent = expanded ? 'Reduire les arrets' : "Charger plus d'arrets";
+      toggleButton.textContent = expanded ? 'Réduire les arrêts' : 'Charger plus d’arrêts';
       toggleButton.setAttribute('aria-expanded', String(expanded));
     } else {
       toggleButton.removeAttribute('aria-expanded');
@@ -406,6 +415,16 @@ function renderVehicleTimeline(timelineData, message, options = {}) {
   }
 }
 
+
+function resolveVehicleBadgeLabel(lineValue) {
+  const normalized = typeof lineValue === 'string'
+    ? lineValue.trim().toUpperCase()
+    : lineValue != null
+      ? String(lineValue).trim().toUpperCase()
+      : '';
+  if (!normalized) return DEFAULT_VEHICLE_BADGE_LABEL;
+  return TRAM_LINE_CODES.has(normalized) ? 'tramway n\u00b0' : 'bus n\u00b0';
+}
 
 function updateVehicleInfoPanel(info) {
   if (!vehicleInfoPanel) return;
@@ -900,13 +919,35 @@ function getBusIcon(color) {
   });
 }
 function getTramIcon(color) {
+  /*const hex = /^[0-9a-f]{3,8}$/i.test(color) ? color : 'ff0000';
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg"
+         viewBox="0 0 448 512"
+         width="24" height="24"
+         style="display:block">
+      <path fill="#${hex}"
+            stroke="#ffffff"
+            stroke-width="28"
+            paint-order="stroke fill"
+            d="M86.8 48c-12.2 0-23.6 5.5-31.2 15L42.7 79C34.5 89.3 19.4 91 9 82.7S-3 59.4 5.3 49L18 33C34.7 12.2 60 0 86.8 0L361.2 0c26.7 0 52 12.2 68.7 33l12.8 16c8.3 10.4 6.6 25.5-3.8 33.7s-25.5 6.6-33.7-3.7L392.5 63c-7.6-9.5-19.1-15-31.2-15L248 48l0 48 40 0c53 0 96 43 96 96l0 160c0 30.6-14.3 57.8-36.6 75.4l65.5 65.5c7.1 7.1 2.1 19.1-7.9 19.1l-39.7 0c-8.5 0-16.6-3.4-22.6-9.4L288 448l-128 0-54.6 54.6c-6 6-14.1 9.4-22.6 9.4L43 512c-10 0-15-12.1-7.9-19.1l65.5-65.5C78.3 409.8 64 382.6 64 352l0-160c0-53 43-96 96-96l40 0 0-48L86.8 48zM160 160c-17.7 0-32 14.3-32 32l0 32c0 17.7 14.3 32 32 32l128 0c17.7 0 32-14.3 32-32l0-32c0-17.7-14.3-32-32-32l-128 0zm32 192a32 32 0 1 0 -64 0 32 32 0 1 0 64 0zm96 32a32 32 0 1 0 0-64 32 32 0 1 0 0 64z"/>
+    </svg>
+  `.trim();
+
   return L.divIcon({
     className: '',
-    html: `<i class="fas fa-tram" style="color:#${color};font-size:24px;text-shadow:0 0 3px #000;"></i>`,
+    html: svg,
+    iconSize: [28,28],
+    iconAnchor: [14,14]
+  });*/
+  return L.divIcon({
+    className: '',
+    html: `<i class="fas fa-train-tram" style="color:#${color};font-size:26px;text-shadow:0 0 3px #000;"></i>`,
     iconSize: [24,24],
     iconAnchor: [12,12]
   });
 }
+
+
 
 
 // ==================================
@@ -916,14 +957,14 @@ function getTramIcon(color) {
 Promise.all([
   fetch('horaires-theoriques-et-arrets-du-reseau-irigo-gtfs.json').then(r => r.json()),
   fetch('irigo_gtfs_lines.geojson').then(r => r.json()),
-  // Tente d'abord irigo_trips.xlsx, puis fallback sur l'extension mal orthographiee .xlxs
+  // Tente d'abord irigo_trips.xlsx, puis fallback sur l'extension mal orthographiée .xlxs
   fetch('irigo_trips.xlsx')
     .then(res => res.ok ? res : fetch('irigo_trips.xlxs'))
     .then(res => {
       if (!res || !res.ok) throw new Error(`HTTP ${res ? res.status : 'no response'}`);
       return res.arrayBuffer();
     }),
-  // Meme traitement pour les horaires des arrets
+  // Même traitement pour les horaires des arrêts
   fetch('irigo_stop_times.xlsx')
     .then(res => res.ok ? res : fetch('irigo_stop_times.xlxs'))
     .then(res => {
@@ -958,11 +999,11 @@ Promise.all([
 
   // Définit les catégories et leurs lignes
   const categories = [
-    { title: 'Tramway',           routes: ['A','B','C'] },
-    { title: 'Lignes majeures',   routes: ['01','02','03','04'] },
+    { title: 'Tramway',             routes: ['A','B','C'] },
+    { title: 'Lignes majeures',     routes: ['01','02','03','04'] },
     { title: 'Lignes de proximité', routes: ['05','06','07','08','09','10','11','12'] },
-    { title: 'Lignes express',    routes: ['20','21','22','23','24','25'] },
-    { title: 'Lignes suburbaines', routes: Array.from({length:13}, (_,i) =>
+    { title: 'Lignes express',      routes: ['20','21','22','23','24','25'] },
+    { title: 'Lignes suburbaines',  routes: Array.from({length:13}, (_,i) =>
                                         String(30 + i).padStart(2,'0')) }
   ];
 
@@ -1240,7 +1281,7 @@ async function chargerVehicules() {
       };
 
       const followLabel = trackedBusId === v.id
-        ? 'Arreter le suivi'
+        ? 'Arrêter le suivi'
         : 'Suivre ce véhicule';
       const popupHtml = `
         <div class="vehicle-popup">
@@ -1267,7 +1308,7 @@ async function chargerVehicules() {
             trackedBusId = v.id;
             trackedPopupOpen = true;
             trackedBusLabel = busLabel;
-            btn.textContent = 'Arreter le suivi';
+            btn.textContent = 'Arrêter le suivi';
             updateTrackHint();
             map.setView(m.getLatLng(), map.getZoom());
           }

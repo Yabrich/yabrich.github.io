@@ -197,7 +197,10 @@ const loadingOverlayText = loadingOverlay ? loadingOverlay.querySelector('.loadi
 const vehicleInfoPanel = document.getElementById('vehicle-info-panel');
 const vehicleInfoToggle = vehicleInfoPanel ? vehicleInfoPanel.querySelector('[data-vehicle-info-toggle]') : null;
 const vehicleInfoBadge = vehicleInfoPanel ? vehicleInfoPanel.querySelector('.vehicle-info-badge') : null;
-const DEFAULT_VEHICLE_BADGE_LABEL = 'V\u00e9hicule n\u00b0';
+const vehicleInfoClose = vehicleInfoPanel ? vehicleInfoPanel.querySelector('[data-vehicle-info-close]') : null;
+const TRAM_VEHICLE_BADGE_LABEL = 'Tramway n\u00b0';
+const BUS_VEHICLE_BADGE_LABEL = 'Bus n\u00b0';
+const DEFAULT_VEHICLE_BADGE_LABEL = BUS_VEHICLE_BADGE_LABEL;
 const TRAM_LINE_CODES = new Set(['A','B','C']);
 
 if (vehicleInfoBadge) {
@@ -256,6 +259,14 @@ if (vehicleInfoToggle) {
     if (vehicleInfoPanel.classList.contains('is-empty')) return;
     vehicleInfoUIState.isCollapsed = !vehicleInfoUIState.isCollapsed;
     applyVehicleInfoCollapseState();
+  });
+}
+
+if (vehicleInfoClose) {
+  vehicleInfoClose.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    clearVehicleInfoPanel();
   });
 }
 
@@ -423,7 +434,7 @@ function resolveVehicleBadgeLabel(lineValue) {
       ? String(lineValue).trim().toUpperCase()
       : '';
   if (!normalized) return DEFAULT_VEHICLE_BADGE_LABEL;
-  return TRAM_LINE_CODES.has(normalized) ? 'tramway n\u00b0' : 'bus n\u00b0';
+  return TRAM_LINE_CODES.has(normalized) ? TRAM_VEHICLE_BADGE_LABEL : BUS_VEHICLE_BADGE_LABEL;
 }
 
 function updateVehicleInfoPanel(info) {
@@ -432,6 +443,9 @@ function updateVehicleInfoPanel(info) {
   const payload = info || {};
   setVehicleInfoField(vehicleInfoFields.id, payload.id);
   setVehicleInfoField(vehicleInfoFields.line, payload.line);
+  if (vehicleInfoBadge) {
+    vehicleInfoBadge.textContent = resolveVehicleBadgeLabel(payload.line);
+  }
   setVehicleInfoField(vehicleInfoFields.destination, payload.destination);
   setVehicleInfoField(vehicleInfoFields.nextStop, payload.nextStop);
   const lineColor = payload.lineColor || DEFAULT_LINE_COLOR;
@@ -457,6 +471,9 @@ function clearVehicleInfoPanel() {
   setVehicleInfoField(vehicleInfoFields.line, '-');
   setVehicleInfoField(vehicleInfoFields.destination, '-');
   setVehicleInfoField(vehicleInfoFields.nextStop, '-');
+  if (vehicleInfoBadge) {
+    vehicleInfoBadge.textContent = DEFAULT_VEHICLE_BADGE_LABEL;
+  }
   vehicleTimelineState.isExpanded = false;
   vehicleTimelineState.data = null;
   vehicleTimelineState.key = null;

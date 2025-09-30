@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
@@ -36,6 +36,45 @@
 </head>
 
 <body>
+  <header class="top-bar">
+    <div class="top-bar__brand">
+      <img src="icon_site.png" alt="Logo YabHereWeGo" class="top-bar__logo" />
+      <span class="top-bar__title">YabHereWeGo</span>
+    </div>
+    <div class="top-bar__actions">
+      <button
+        id="locate_btn"
+        class="top-bar__icon-btn"
+        type="button"
+        title="Me localiser"
+        aria-label="Me localiser"
+      >
+        <i class="fas fa-location-crosshairs" aria-hidden="true"></i>
+      </button>
+      <button
+        id="filter_toggle_btn"
+        class="top-bar__icon-btn"
+        type="button"
+        title="Filtrer les lignes"
+        aria-label="Filtrer les lignes"
+        aria-haspopup="true"
+        aria-expanded="false"
+      >
+        <i class="fas fa-sliders-h" aria-hidden="true"></i>
+      </button>
+    </div>
+  </header>
+
+  <div
+    id="filter-panel"
+    role="dialog"
+    aria-labelledby="filter-panel-title"
+    aria-hidden="true"
+  >
+    <strong id="filter-panel-title">Filtrer les lignes</strong>
+    <div id="filter-list"></div>
+  </div>
+
   <div id="loading-overlay">
     <div class="loading-panel">
       <div class="loading-spinner"></div>
@@ -78,22 +117,6 @@
       </div>
     </div>
   </div>
-  <div id="filter-panel" style="
-     position: absolute;
-     top: 10px; right: 10px;
-     background: rgba(255,255,255,0.9);
-     z-index: 1000;
-     font-family: Arial, Helvetica, sans-serif;
-     padding: 8px;
-     max-height: 60vh;
-     overflow-y: auto;
-     border-radius: 4px;
-     box-shadow: 0 0 5px rgba(0,0,0,0.3);
-    ">
-  <strong>Filtrer les lignes</strong>
-  <div id="filter-list"></div>
-</div>
-  <button id="locate_btn">Me localiser</button>
   <div id="update_timer"></div>
   <div id="track_hint">Cliquez sur un véhicule pour le suivre</div>
 

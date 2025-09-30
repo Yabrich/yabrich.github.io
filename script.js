@@ -4,6 +4,7 @@
 const styleEl = document.createElement('style');
 styleEl.textContent = `
 .checkbox-wrapper {
+  --line-color: #483f91;
   display: flex;
   align-items: center;
   margin: 4px 0;
@@ -18,47 +19,74 @@ styleEl.textContent = `
   padding-left: 28px;
   cursor: pointer;
   user-select: none;
-  font-weight: bold;
-  transition: transform 0.2s ease;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  transition: transform 0.18s ease, color 0.18s ease;
 }
 .checkbox-wrapper label:before {
   content: '';
   position: absolute;
   left: 0;
-  top: 0;
+  top: 2px;
   width: 20px;
   height: 20px;
-  border: 2px solid #888;
-  border-radius: 4px;
-  background: #fff;
-  transition: background 0.3s ease, transform 0.2s ease;
-}
-.checkbox-wrapper input:checked + label:before {
-  background: currentColor;
-  transform: scale(1.1);
+  border: 2px solid var(--line-color, #888);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.9);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
 }
 .checkbox-wrapper input:checked + label {
-  transform: scale(1.05);
+  transform: translateY(-1px);
 }
-
-/* Styles pour le bouton Tout cocher / Tout décocher et Me localiser */
-#toggle-all-btn,
-#locate_btn {
+.checkbox-wrapper input:checked + label:before {
+  background: var(--line-color, currentColor);
+  border-color: var(--line-color, currentColor);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+}
+.checkbox-wrapper input:focus-visible + label:before {
+  outline: 2px solid rgba(72, 63, 145, 0.45);
+  outline-offset: 2px;
+}
+.checkbox-wrapper label .filter-line-label-text {
+  flex: 1;
+  font-weight: 600;
+}
+.checkbox-wrapper label .filter-line-count {
+  transition: background 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+}
+#toggle-all-btn {
   display: inline-block;
-  padding: 6px 12px;
-  margin: 8px 0;
+  width: 100%;
+  padding: 8px 14px;
+  margin: 8px 0 12px;
   background-color: #483f91;
   color: #fff;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
-  font-weight: bold;
-  transition: background-color 0.2s ease, transform 0.2s ease;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 12px rgba(72, 63, 145, 0.35);
 }
-#toggle-all-btn:hover,
-#locate_btn:hover {
+#toggle-all-btn:hover {
   background-color: #372d6e;
   transform: translateY(-1px);
+}
+#toggle-all-btn:active {
+  transform: translateY(0);
+}
+body.dark-mode #toggle-all-btn {
+  background-color: #555;
+  color: #eee;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+body.dark-mode #toggle-all-btn:hover {
+  background-color: #444;
 }
 `;
 document.head.append(styleEl);
@@ -149,14 +177,18 @@ function loadSelectedRoutes() {
   const stored = localStorage.getItem('selectedRoutes');
   if (stored) {
     try {
-      return new Set(JSON.parse(stored));
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        const normalized = parsed.map(normalizeRouteId).filter(Boolean);
+        if (normalized.length) {
+          return new Set(normalized);
+        }
+      }
     } catch (e) {
       console.warn('Impossible de parser selectedRoutes dans localStorage :', e);
-      return new Set();
     }
   }
-  // Par défaut, afficher les lignes de tramway et lignes majeures
-  const defaultRoutes = ['A','B','C','01','02','03','04'];
+  const defaultRoutes = ['A','B','C','01','02','03','04'].map(normalizeRouteId);
   localStorage.setItem('selectedRoutes', JSON.stringify(defaultRoutes));
   return new Set(defaultRoutes);
 }
@@ -179,6 +211,59 @@ const DEFAULT_SPEED_M_S = 10;
 const MIN_SPEED_M_S = 3;
 const DELAY_THRESHOLD_SECONDS = 90;
 
+function normalizeRouteId(value) {
+  if (value == null) return '';
+  const raw = String(value).trim();
+  if (!raw) return '';
+  const expressMatch = raw.match(/^E(\d{1,2})$/i);
+  if (expressMatch) return expressMatch[1].padStart(2, '0');
+  const isTwoDigitNumber = raw.length <= 2 && /^[0-9]+$/.test(raw);
+  if (isTwoDigitNumber) return raw.padStart(2, '0');
+  return raw.toUpperCase();
+}
+
+function normalizeHexColor(value, fallback = DEFAULT_LINE_COLOR) {
+  const parse = input => {
+    if (!input && input !== 0) return null;
+    const hex = String(input).trim().replace(/^#/, '');
+    if (/^[0-9a-fA-F]{6}$/.test(hex)) return '#' + hex.toLowerCase();
+    if (/^[0-9a-fA-F]{3}$/.test(hex)) {
+      return '#' + hex.split('').map(ch => (ch + ch)).join('').toLowerCase();
+    }
+    return null;
+  };
+  return parse(value) ?? parse(fallback) ?? '#4caf50';
+}
+
+function computeBadgePalette(color) {
+  const base = normalizeHexColor(color);
+  const numeric = base.slice(1);
+  const r = parseInt(numeric.slice(0, 2), 16);
+  const g = parseInt(numeric.slice(2, 4), 16);
+  const b = parseInt(numeric.slice(4, 6), 16);
+  const rgba = alpha => 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  const textColor = luminance > 0.62 ? '#1f1f1f' : '#ffffff';
+  return {
+    base,
+    text: textColor,
+    bg: rgba(0.18),
+    activeBg: rgba(0.34),
+    border: rgba(0.42),
+    shadow: rgba(0.32)
+  };
+}
+
+function applyCountBadgePalette(badge, palette) {
+  if (!badge || !palette) return;
+  badge.style.setProperty('--line-color', palette.base);
+  badge.style.setProperty('--badge-bg', palette.bg);
+  badge.style.setProperty('--badge-active-bg', palette.activeBg);
+  badge.style.setProperty('--badge-border-color', palette.border);
+  badge.style.setProperty('--badge-shadow-color', palette.shadow);
+  badge.style.setProperty('--badge-color', palette.text);
+}
+
 // Gestion de l'affichage du message de suivi
 const trackHintEl = document.getElementById('track_hint');
 function updateTrackHint() {
@@ -190,6 +275,75 @@ function updateTrackHint() {
 }
 updateTrackHint();
 
+const filterPanelEl = document.getElementById('filter-panel');
+const filterListEl = document.getElementById('filter-list');
+const filterToggleBtn = document.getElementById('filter_toggle_btn');
+const routeCountBadges = new Map();
+let latestVehicleCounts = new Map();
+
+function formatRouteLabel(routeId) {
+  const numeric = Number(routeId);
+  if (!Number.isNaN(numeric) && numeric >= 20 && numeric <= 25) {
+    return `E${routeId}`;
+  }
+  return routeId;
+}
+
+function setFilterPanelOpen(isOpen) {
+  if (!filterPanelEl) return;
+  const open = Boolean(isOpen);
+  filterPanelEl.classList.toggle('is-open', open);
+  filterPanelEl.setAttribute('aria-hidden', (!open).toString());
+  if (filterToggleBtn) {
+    filterToggleBtn.setAttribute('aria-expanded', open.toString());
+    filterToggleBtn.classList.toggle('is-active', open);
+  }
+}
+
+setFilterPanelOpen(false);
+
+if (filterToggleBtn) {
+  filterToggleBtn.addEventListener('click', event => {
+    event.stopPropagation();
+    const shouldOpen = !(filterPanelEl && filterPanelEl.classList.contains('is-open'));
+    setFilterPanelOpen(shouldOpen);
+  });
+}
+
+document.addEventListener('click', event => {
+  if (!filterPanelEl || !filterPanelEl.classList.contains('is-open')) return;
+  if (filterPanelEl.contains(event.target)) return;
+  if (filterToggleBtn && filterToggleBtn.contains(event.target)) return;
+  setFilterPanelOpen(false);
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') {
+    setFilterPanelOpen(false);
+  }
+});
+
+function updateFilterVehicleCounts(countMap) {
+  latestVehicleCounts = countMap instanceof Map
+    ? new Map(countMap)
+    : new Map(countMap ? countMap : []);
+  routeCountBadges.forEach((badge, routeId) => {
+    const count = latestVehicleCounts.get(routeId) ?? 0;
+    badge.textContent = String(count);
+    const hasVehicles = count > 0;
+    badge.classList.toggle('is-active', hasVehicles);
+    badge.style.opacity = hasVehicles ? '1' : '0.55';
+    badge.setAttribute('data-count', String(count));
+    const label = badge.closest('label');
+    if (label) {
+      const displayText = label.querySelector('.filter-line-label-text')?.textContent?.trim() || routeId;
+      const suffix = count > 1 ? 'véhicules' : 'véhicule';
+      badge.setAttribute('title', `${count} ${suffix}`);
+      label.setAttribute('aria-label', `${displayText} – ${count} ${suffix} en service`);
+    }
+  });
+}
+
 const loadingOverlay = document.getElementById('loading-overlay');
 const loadingOverlaySpinner = loadingOverlay ? loadingOverlay.querySelector('.loading-spinner') : null;
 const loadingOverlayText = loadingOverlay ? loadingOverlay.querySelector('.loading-text') : null;
@@ -198,8 +352,8 @@ const vehicleInfoPanel = document.getElementById('vehicle-info-panel');
 const vehicleInfoToggle = vehicleInfoPanel ? vehicleInfoPanel.querySelector('[data-vehicle-info-toggle]') : null;
 const vehicleInfoBadge = vehicleInfoPanel ? vehicleInfoPanel.querySelector('.vehicle-info-badge') : null;
 const vehicleInfoClose = vehicleInfoPanel ? vehicleInfoPanel.querySelector('[data-vehicle-info-close]') : null;
-const TRAM_VEHICLE_BADGE_LABEL = 'Tramway n\u00b0';
-const BUS_VEHICLE_BADGE_LABEL = 'Bus n\u00b0';
+const TRAM_VEHICLE_BADGE_LABEL = 'Tramway n°';
+const BUS_VEHICLE_BADGE_LABEL = 'Bus n°';
 const DEFAULT_VEHICLE_BADGE_LABEL = BUS_VEHICLE_BADGE_LABEL;
 const TRAM_LINE_CODES = new Set(['A','B','C']);
 
@@ -905,7 +1059,7 @@ applyDayNightMode();
 function updateLines() {
   if (linesLayer) map.removeLayer(linesLayer);
   linesLayer = L.geoJSON(linesGeoJSON, {
-    filter: feature => selectedRoutes.has(feature.properties.route_id),
+    filter: feature => selectedRoutes.has(normalizeRouteId(feature.properties.route_id)),
     style: feature => ({
       color: '#' + feature.properties.route_color,
       weight: 3,
@@ -1010,8 +1164,9 @@ Promise.all([
     }
   });
   geojson.features.forEach(f => {
-    const rid = f.properties.route_id;
-    lineColors[rid] = f.properties.route_color;
+    const rid = normalizeRouteId(f.properties.route_id);
+    if (!rid) return;
+    lineColors[rid] = normalizeHexColor(f.properties.route_color);
   });
 
   // Définit les catégories et leurs lignes
@@ -1025,99 +1180,107 @@ Promise.all([
   ];
 
   // Initialise panneau de filtres
-  const filterPanel  = document.getElementById('filter-panel');
-  const filterHeader = filterPanel.querySelector('strong');
-  const filterList   = document.getElementById('filter-list');
+  const filterPanel = filterPanelEl;
+  const filterHeader = filterPanel ? filterPanel.querySelector('strong') : null;
+  const filterList = filterListEl;
 
-  filterList.style.maxHeight  = '0';
-  filterList.style.overflow   = 'hidden';
-  filterList.style.transition = 'max-height 0.4s ease';
+  if (filterHeader) {
+    filterHeader.textContent = 'Filtrer les lignes';
+  }
 
-  let open = false;
-  filterHeader.style.cursor = 'pointer';
-  filterHeader.addEventListener('click', () => {
-    open = !open;
-    filterList.style.maxHeight = open
-      ? filterList.scrollHeight + 'px'
-      : '0';
-    filterHeader.innerHTML = open
-      ? '▼ Filtrer les lignes'
-      : '▶ Filtrer les lignes';
-  });
-  filterHeader.innerHTML = '▶ Filtrer les lignes';
-  document.addEventListener('click', (e) => {
-    if (open && !filterPanel.contains(e.target) && e.target !== filterHeader) {
-      open = false;
-      filterList.style.maxHeight = '0';
-      filterHeader.innerHTML = '▶ Filtrer les lignes';
-    }
-  });
+  if (filterList) {
+    filterList.innerHTML = '';
+  }
+  routeCountBadges.clear();
 
-  // Vide le panneau
-  filterList.innerHTML = '';
-
-  // Ajout du bouton Tout cocher / Tout décocher
   const toggleBtn = document.createElement('button');
   toggleBtn.id = 'toggle-all-btn';
   toggleBtn.textContent = 'Tout cocher';
-  toggleBtn.style.margin = '8px 0';
   toggleBtn.addEventListener('click', () => {
+    if (!filterList) return;
     const allCheckboxes = filterList.querySelectorAll('input[type="checkbox"]');
     const selectAll = toggleBtn.textContent === 'Tout cocher';
     allCheckboxes.forEach(chk => {
       chk.checked = selectAll;
       const rid = chk.value;
-      if (selectAll) selectedRoutes.add(rid);
-      else selectedRoutes.delete(rid);
+      if (selectAll) {
+        selectedRoutes.add(rid);
+      } else {
+        selectedRoutes.delete(rid);
+      }
     });
     toggleBtn.textContent = selectAll ? 'Tout décocher' : 'Tout cocher';
-    // Sauvegarde dans localStorage
     localStorage.setItem('selectedRoutes', JSON.stringify(Array.from(selectedRoutes)));
     updateLines();
     updateVehicles();
   });
-  filterList.appendChild(toggleBtn);
 
-  // Génère chaque section de filtres
-  categories.forEach(cat => {
-    const catTitle = document.createElement('div');
-    catTitle.textContent = cat.title;
-    catTitle.style.fontWeight = 'bold';
-    catTitle.style.margin = '8px 0 4px';
-    filterList.appendChild(catTitle);
+  if (filterList) {
+    filterList.appendChild(toggleBtn);
 
-    cat.routes.forEach(rid => {
-      if (!(rid in lineColors)) return;
+    categories.forEach(cat => {
+      const catTitle = document.createElement('div');
+      catTitle.textContent = cat.title;
+      catTitle.style.fontWeight = 'bold';
+      catTitle.style.margin = '8px 0 4px';
+      filterList.appendChild(catTitle);
 
-      const wrapper = document.createElement('div');
-      wrapper.classList.add('checkbox-wrapper');
+      cat.routes.forEach(routeId => {
+        const routeKey = normalizeRouteId(routeId);
+        if (!routeKey || !(routeKey in lineColors)) return;
 
-      const chk = document.createElement('input');
-      chk.type  = 'checkbox';
-      chk.id    = `chk-${rid}`;
-      chk.value = rid;
-      // On coche si l'utilisateur avait déjà sélectionné cette route
-      chk.checked = selectedRoutes.has(rid);
+        const palette = computeBadgePalette(lineColors[routeKey]);
 
-      const lbl = document.createElement('label');
-      lbl.htmlFor = chk.id;
-      lbl.textContent = (rid >= 20 && rid <= 25) ? `E${rid}` : rid;
-      lbl.style.color = '#' + lineColors[rid];
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('checkbox-wrapper');
+        wrapper.style.setProperty('--line-color', palette.base);
 
-      chk.addEventListener('change', () => {
-        if (chk.checked) selectedRoutes.add(rid);
-        else selectedRoutes.delete(rid);
-        // Sauvegarde dans localStorage
-        localStorage.setItem('selectedRoutes', JSON.stringify(Array.from(selectedRoutes)));
-        updateLines();
-        updateVehicles();
+        const chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.id = 'chk-' + routeKey;
+        chk.value = routeKey;
+        chk.checked = selectedRoutes.has(routeKey);
+
+        const lbl = document.createElement('label');
+        lbl.htmlFor = chk.id;
+        lbl.style.setProperty('--line-color', palette.base);
+
+        const labelText = document.createElement('span');
+        labelText.className = 'filter-line-label-text';
+        labelText.textContent = formatRouteLabel(routeKey);
+        labelText.style.color = palette.base;
+
+        const countBadge = document.createElement('span');
+        countBadge.className = 'filter-line-count';
+        countBadge.textContent = '0';
+        applyCountBadgePalette(countBadge, palette);
+        routeCountBadges.set(routeKey, countBadge);
+
+        lbl.append(labelText, countBadge);
+
+        chk.addEventListener('change', () => {
+          const key = chk.value;
+          if (chk.checked) {
+            selectedRoutes.add(key);
+          } else {
+            selectedRoutes.delete(key);
+          }
+          localStorage.setItem('selectedRoutes', JSON.stringify(Array.from(selectedRoutes)));
+          updateLines();
+          updateVehicles();
+        });
+
+        wrapper.append(chk, lbl);
+        filterList.appendChild(wrapper);
       });
-
-      wrapper.append(chk, lbl);
-      filterList.appendChild(wrapper);
     });
-  });
 
+    const allCheckboxes = filterList.querySelectorAll('input[type="checkbox"]');
+    const allSelected = allCheckboxes.length > 0 && Array.from(allCheckboxes).every(chk => chk.checked);
+    toggleBtn.textContent = allSelected ? 'Tout décocher' : 'Tout cocher';
+  }
+
+  updateFilterVehicleCounts(latestVehicleCounts);
 
   // Table de correspondance pour les destinations.
   const workbook   = XLSX.read(irigo_trips, { type: 'array' });
@@ -1248,22 +1411,26 @@ async function chargerVehicules() {
     //const resp = await fetch('http://localhost:5000/vehicules-irigo.json');
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
+    const routeCounts = new Map();
+    data.forEach(v => {
+      const routeKey = normalizeRouteId(v.route_id);
+      if (!routeKey) return;
+      routeCounts.set(routeKey, (routeCounts.get(routeKey) || 0) + 1);
+    });
+    updateFilterVehicleCounts(routeCounts);
+
     const referenceSeconds = getSecondsSinceMidnight(new Date());
     data.forEach(v => {
-      const rawRouteId = v.route_id != null ? String(v.route_id) : '';
-      if (!selectedRoutes.has(rawRouteId)) return;
+      const routeKey = normalizeRouteId(v.route_id);
+      if (!routeKey || !selectedRoutes.has(routeKey)) return;
 
-      const colorValue = lineColors[rawRouteId] || '3388ff';
-      const sanitizedColor = String(colorValue).replace(/^#/, '');
-      const icon = ['A','B','C'].includes(rawRouteId)
+      const lineColorHex = normalizeHexColor(lineColors[routeKey]);
+      const sanitizedColor = lineColorHex.slice(1);
+      const icon = ['A','B','C'].includes(routeKey)
         ? getTramIcon(sanitizedColor)
         : getBusIcon(sanitizedColor);
 
-      let displayLine = rawRouteId;
-      const numericRoute = Number(rawRouteId);
-      if (!Number.isNaN(numericRoute) && numericRoute >= 20 && numericRoute <= 25) {
-        displayLine = `E${rawRouteId}`;
-      }
+      const displayLine = formatRouteLabel(routeKey);
 
       let busLabel = v.id;
       if (busLabel && busLabel.length > 4) busLabel = 'Bus Suburbain';
@@ -1283,8 +1450,6 @@ async function chargerVehicules() {
         referenceSeconds
       );
       const timelineMessage = timelineResult ? timelineResult.message : undefined;
-      const candidateLineColor = `#${sanitizedColor}`;
-      const lineColorHex = /^#[0-9a-fA-F]{3,8}$/.test(candidateLineColor) ? candidateLineColor : DEFAULT_LINE_COLOR;
 
       const infoPayload = {
         id: busLabel,

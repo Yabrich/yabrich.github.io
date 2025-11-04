@@ -1,6 +1,4 @@
-﻿import * as XLSX from 'https://cdn.sheetjs.com/xlsx-0.19.0/package/xlsx.mjs';
-
-// Dynamically inject CSS for styled checkboxes
+﻿// Dynamically inject CSS for styled checkboxes
 const styleEl = document.createElement('style');
 styleEl.textContent = `
 .checkbox-wrapper {
@@ -90,6 +88,50 @@ body.dark-mode #toggle-all-btn:hover {
 }
 `;
 document.head.append(styleEl);
+
+// =============================================
+// 0. FONCTION PARSE TXT => CSV
+// =============================================
+
+function parseCSV(text) {
+  if (!text) return [];
+  const lines = text.replace(/\r\n?/g, '\n').split('\n').filter(l => l.trim() !== '');
+  if (lines.length === 0) return [];
+  const splitCSV = (line) => {
+    const result = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+        else { inQuotes = !inQuotes; }
+      } else if (ch === ',' && !inQuotes) {
+        result.push(cur); cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    result.push(cur);
+    return result.map(v => v.trim());
+  };
+  const headers = splitCSV(lines[0]).map(h => h.replace(/^"|"$/g, ''));
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const parts = splitCSV(lines[i]);
+    const obj = {};
+    for (let c = 0; c < headers.length; c++) {
+      const key = headers[c];
+      let val = parts[c] ?? '';
+      if (val && val.length >= 2 && val.startsWith('"') && val.endsWith('"')) {
+        val = val.slice(1, -1).replace(/""/g, '"');
+      }
+      obj[key] = val;
+    }
+    rows.push(obj);
+  }
+  return rows;
+}
 
 // =============================================
 // 1. GESTION DU MODE SOMBRE (SUNRISE / SUNSET)
@@ -194,7 +236,7 @@ function loadSelectedRoutes() {
 }
 
 let selectedRoutes = loadSelectedRoutes();
-let linesGeoJSON, stopsData, irigo_trips;
+let linesGeoJSON, stopsData;
 let lineColors = {}; // Couleur par ligne
 let stopNames = {}; // Nom par identifiant de station
 let stopCoords = {}; // Coordonnées par station
@@ -957,17 +999,11 @@ function buildVehicleTimelineData(tripId, nextStopId, fallbackStopId, vehiclePos
     allItems: fullItems
   };
 }
-function hydrateStopTimesMap(arrayBuffer) {
+function hydrateStopTimesMapFromCSV(stopTimesText) {
   tripStopTimesMap.clear();
-  if (!arrayBuffer) return;
-
+  if (!stopTimesText) return;
   try {
-    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-    const sheetName = workbook.SheetNames.find(name => name && name.toLowerCase().includes('stop')) || workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    if (!sheet) return;
-
-    const rows = XLSX.utils.sheet_to_json(sheet, { raw: true });
+    const rows = parseCSV(stopTimesText);
     rows.forEach(row => {
       const tripVal = row.trip_id ?? row.TRIP_ID ?? row['trip id'] ?? row['Trip ID'];
       const stopVal = row.stop_id ?? row.STOP_ID ?? row['stop id'] ?? row['Stop ID'];
@@ -981,16 +1017,16 @@ function hydrateStopTimesMap(arrayBuffer) {
       if (!Number.isFinite(sequenceNumber)) return;
 
       const departureRaw = row.departure_time ?? row.DEPARTURE_TIME ?? row['departure time'] ?? row['Departure Time'];
-      const arrivalRaw = row.arrival_time ?? row.ARRIVAL_TIME ?? row['arrival time'] ?? row['Arrival Time'];
+      const arrivalRaw   = row.arrival_time   ?? row.ARRIVAL_TIME   ?? row['arrival time']   ?? row['Arrival Time'];
       const departureNormalized = normalizeTimeValue(departureRaw ?? arrivalRaw ?? '');
-      const arrivalNormalized = normalizeTimeValue(arrivalRaw ?? departureRaw ?? '');
+      const arrivalNormalized   = normalizeTimeValue(arrivalRaw   ?? departureRaw ?? '');
       const entry = {
         stopId,
         sequence: sequenceNumber,
         departureTime: departureNormalized,
         arrivalTime: arrivalNormalized,
         departureSeconds: timeStringToSeconds(departureNormalized),
-        arrivalSeconds: timeStringToSeconds(arrivalNormalized)
+        arrivalSeconds:   timeStringToSeconds(arrivalNormalized)
       };
 
       let targetList;
@@ -1006,22 +1042,20 @@ function hydrateStopTimesMap(arrayBuffer) {
       if (tripKey !== tripKeyNoZ && !tripStopTimesMap.has(tripKeyNoZ)) {
         tripStopTimesMap.set(tripKeyNoZ, targetList);
       }
-
       targetList.push(entry);
     });
 
+    // tri par stop_sequence
     const sorted = new Set();
     tripStopTimesMap.forEach(list => {
       if (sorted.has(list)) return;
       list.sort((a, b) => a.sequence - b.sequence);
       sorted.add(list);
     });
-  } catch (error) {
-    console.warn('Impossible de lire irigo_stop_times.xlsx :', error);
+  } catch (e) {
+    console.warn('Impossible de lire stop_times.txt :', e);
   }
 }
-
-
 
 if (vehicleInfoPanel) {
   document.addEventListener('click', event => {
@@ -1042,13 +1076,8 @@ if (vehicleInfoPanel) {
 
 const map = L.map('map').setView([47.4736, -0.5541], 13);
 
-// Créer d’emblée les tile layers
 initTileLayers();
-
-// Par défaut, on ajoute celui qui correspond à l’heure actuelle (le reste est géré dans applyDayNightMode)
 map.addLayer(lightTileLayer);
-
-// On lance tout de suite la détection jour/nuit
 applyDayNightMode();
 
 
@@ -1128,27 +1157,15 @@ function getTramIcon(color) {
 Promise.all([
   fetch('horaires-theoriques-et-arrets-du-reseau-irigo-gtfs.json').then(r => r.json()),
   fetch('irigo_gtfs_lines.geojson').then(r => r.json()),
-  // Tente d'abord irigo_trips.xlsx, puis fallback sur l'extension mal orthographiée .xlxs
-  fetch('irigo_trips.xlsx')
-    .then(res => res.ok ? res : fetch('irigo_trips.xlxs'))
-    .then(res => {
-      if (!res || !res.ok) throw new Error(`HTTP ${res ? res.status : 'no response'}`);
-      return res.arrayBuffer();
-    }),
-  // Même traitement pour les horaires des arrêts
-  fetch('irigo_stop_times.xlsx')
-    .then(res => res.ok ? res : fetch('irigo_stop_times.xlxs'))
-    .then(res => {
-      if (!res || !res.ok) throw new Error(`HTTP ${res ? res.status : 'no response'}`);
-      return res.arrayBuffer();
-    })
+  fetch('trips.txt').then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.text(); }),
+  fetch('stop_times.txt').then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.text(); })
 ])
-.then(([stops, geojson, tripsArrayBuffer, stopTimesArrayBuffer]) => {
+.then(([stops, geojson, tripsText, stopTimesText]) => {
   stopsData = stops;
   linesGeoJSON = geojson;
-  irigo_trips = tripsArrayBuffer;
 
-  hydrateStopTimesMap(stopTimesArrayBuffer);
+  // hydrate stop_times depuis CSV
+  hydrateStopTimesMapFromCSV(stopTimesText);
 
   // Construire stopNames/coords et lineColors
   stops.forEach(s => {
@@ -1282,15 +1299,9 @@ Promise.all([
 
   updateFilterVehicleCounts(latestVehicleCounts);
 
-  // Table de correspondance pour les destinations.
-  const workbook   = XLSX.read(irigo_trips, { type: 'array' });
-  // Cherche une feuille nommée "trips" sinon prend la première
-  const sheetName  = (workbook.SheetNames.find(n => n && n.toLowerCase().includes('trip')) || workbook.SheetNames[0]);
-  const sheet      = workbook.Sheets[sheetName];
-  const tripsJSON  = XLSX.utils.sheet_to_json(sheet, { raw: true });
-
   // Construit la map avec clés normalisées (avec et sans zéros initiaux)
-  window.tripHeadsignMap = tripsJSON.reduce((map, row) => {
+  const tripsRows = parseCSV(tripsText);
+  window.tripHeadsignMap = tripsRows.reduce((map, row) => {
     const idVal = row.trip_id ?? row.TRIP_ID ?? row['Trip ID'] ?? row['tripId'];
     const head  = row.trip_headsign ?? row.headsign ?? row.destination ?? row['Trip Headsign'] ?? row['trip Headsign'];
     if (idVal != null && head != null && head !== '') {

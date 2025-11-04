@@ -17,10 +17,15 @@ body {
   background-color: #ffffff;
 }
 #map {
+  position: absolute;
+  top: var(--top-bar-height);
+  left: 0;
+  right: 0;
+  bottom: 0;
   width: 100%;
-  height: calc(100% - var(--top-bar-height));
-  margin-top: var(--top-bar-height);
+  height: auto;
 }
+
 
 .top-bar {
   position: fixed;

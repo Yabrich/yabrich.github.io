@@ -1,31 +1,58 @@
-# YabHereWeGo
+# 🌍 Track'Irigo — Carte temps réel Irigo  
+![Version](https://img.shields.io/badge/version-1.1.2-blue?style=for-the-badge)
 
-Cette page web affiche une carte interactive du réseau Irigo grâce à la bibliothèque Leaflet. Elle est accessible à l'adresse [yabrich.github.io](https://yabrich.github.io).
+Une carte interactive pensée pour rendre les déplacements sur le réseau **Irigo (Angers Loire Métropole)** plus simples et plus visuels.
 
-## Fonctionnalités
+Accessible ici : **https://yabrich.github.io**
 
-- **Localisation** : bouton *Me localiser* pour centrer la carte sur votre position.
-- **Mode sombre/clair** : le fond de carte bascule automatiquement selon l'heure (lever/coucher du soleil).
-- **Affichage détaillé des véhicules** : en cliquant sur un véhicule, vous obtenez son numéro de parc, la ligne, le prochain arrêt et la destination.
-- **Suivi de véhicule** : depuis la fenêtre d'information d'un véhicule, cliquez sur *Suivre ce véhicule* pour que la carte reste centrée sur lui.
-- **Filtre des lignes** : choisissez les lignes à afficher. Les lignes sélectionnées sont mémorisées. Les lignes disponibles vont du tramway **A**, **B**, **C** aux bus **01** à **42**.
+---
 
-## Fichiers principaux
+## ✨ Pourquoi ce projet ?
+Il n’existe pas d’outil vraiment agréable pour visualiser **en direct** les bus et trams Irigo.
 
-- `index.html` : structure de la page et intégration de Leaflet.
-- `script.js` : logique de la carte (filtrage des lignes, localisations, récupération des véhicules...).
-- `irigo_gtfs_lines.geojson` : géométries des lignes du réseau.
-- `horaires-theoriques-et-arrets-du-reseau-irigo-gtfs.json` : arrêts et informations GTFS.
-- `irigo_trips.xlsx` : tableau des voyages du réseau extrait du GTFS (lignes, arrêt départ, destination, horaires).
+---
 
-## Utilisation
+## 🚀 Fonctionnalités principales
 
-Le site s'utilise directement via [yabrich.github.io](https://yabrich.github.io).
+### 🚌 Véhicules en temps réel  
+- Affichage instantané des véhicules du réseau.  
+- Clic sur un véhicule pour voir :  
+  - son numéro de parc  
+  - sa ligne  
+  - sa destination  
+  - son prochain arrêt
 
-Pour un usage __hors ligne__, il est nécessaire d’utiliser un serveur local (par exemple : `Live Server`, `http-server`, `python -m http.server`, etc.). En effet, ouvrir directement `index.html` dans le navigateur peut entraîner des dysfonctionnements liés aux restrictions CORS (Cross-Origin Resource Sharing) qui bloquent certaines requêtes locales, notamment pour le chargement de fichiers JSON ou GeoJSON.
+### 🎯 Suivi intelligent  
+- Bouton **Suivre ce véhicule** pour garder la carte centrée automatiquement sur le véhicule choisi.
 
-Cette page télécharge régulièrement la position des véhicules via l'API externe `https://ara-api.enroute.mobi/irigo/gtfs/vehicle-positions` (toutes les 30 s environ). Une connexion Internet est donc requise pour cette fonctionnalité ainsi que pour charger les tuiles de carte.
+### 🌓 Ambiance automatique (jour/nuit)  
+- Le fond de carte bascule selon l’heure locale grâce au calcul du lever/coucher du soleil.
 
-## Illustration
+### 🗺️ Filtrer les lignes  
+- Sélectionner les lignes à afficher :  
+  - Tram A / B / C  
+  - Bus 01 → 42  
+- Idéal pour alléger la carte.
 
-![Aperçu de la carte](img/map.png)
+### 📍 Me localiser  
+- Permet de centrer la carte sur sa position en un clic.
+
+---
+
+## 📁 Structure du projet
+
+### Fichiers principaux
+- **index.html** — Structure générale et intégration Leaflet  
+- **script.js** — Logique : récupération véhicules, suivi, filtres, ambiance, interactions  
+- **style.css** — Styles, thèmes, animations, mode jour/nuit  
+- **horaires-theoriques-et-arrets-du-reseau-irigo-gtfs.json** — Données GTFS retravaillées  
+- **irigo_gtfs_lines.geojson** — Tracés des lignes du réseau
+
+### Outils annexes
+- **inspect_xlsx.py** — Analyse du GTFS  
+- **http_server.py** — Serveur local pour tests  
+- **old_excel/** — Archivage des anciennes versions/extracts GTFS
+
+---
+
+Les données temps réel et les fonds de carte nécessitent une connexion Internet.

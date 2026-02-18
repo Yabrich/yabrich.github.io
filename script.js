@@ -1155,7 +1155,25 @@ function getTramIcon(color) {
 // ==================================
 
 Promise.all([
-  fetch('horaires-theoriques-et-arrets-du-reseau-irigo-gtfs.json').then(r => r.json()),
+  fetch('stops.txt').then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.text(); })
+    .then(text => {
+      const rows = parseCSV(text);
+      return rows.map(row => {
+        const stopId = row.stop_id ?? row.STOP_ID ?? row['Stop ID'];
+        const stopName = row.stop_name ?? row.STOP_NAME ?? row['Stop Name'];
+        const stopLat = row.stop_lat ?? row.STOP_LAT ?? row['Stop Lat'];
+        const stopLon = row.stop_lon ?? row.STOP_LON ?? row['Stop Lon'];
+        
+        return {
+          stop_id: stopId,
+          stop_name: stopName,
+          stop_coordinates: {
+            lat: Number(stopLat),
+            lon: Number(stopLon)
+          }
+        };
+      });
+    }),
   fetch('irigo_gtfs_lines.geojson').then(r => r.json()),
   fetch('trips.txt').then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.text(); }),
   fetch('stop_times.txt').then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.text(); })

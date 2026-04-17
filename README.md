@@ -3,7 +3,7 @@
 
 Une carte interactive pensée pour rendre les déplacements sur le réseau **Irigo (Angers Loire Métropole)** plus simples et plus visuels.
 
-Accessible ici : **https://railway.yabrich.fr**
+Accessible ici : **https://trackirigo.yabrich.fr**
 
 ---
 
